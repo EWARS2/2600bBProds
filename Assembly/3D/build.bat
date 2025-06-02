@@ -1,0 +1,1 @@
+dasm "%~f1" -I"%bB%"/includes -f3 -l"%~f1.lst" -s"%~f1.sym" -o"%~f1.a26"

@@ -1,0 +1,2822 @@
+------- FILE C:\Users\jefma\Desktop\gaem\Assembly\3D\RunesOfMoria_src.a LEVEL 1 PASS 2
+      1  10000 ????
+      2  10000 ????				       processor	6502
+------- FILE vcs.h LEVEL 2 PASS 2
+      0  10000 ????				       include	"vcs.h"
+      1  10000 ????						; Provided under the CC0 license. See the included LICENSE.txt for details.
+      2  10000 ????
+      3  10000 ????						; VCS.H
+      4  10000 ????						; Version 1.05, 13/November/2003
+      5  10000 ????
+      6  10000 ????		00 69	    VERSION_VCS =	105
+      7  10000 ????
+      8  10000 ????						; THIS IS A PRELIMINARY RELEASE OF *THE* "STANDARD" VCS.H
+      9  10000 ????						; THIS FILE IS EXPLICITLY SUPPORTED AS A DASM-PREFERRED COMPANION FILE
+     10  10000 ????						; PLEASE DO *NOT* REDISTRIBUTE THIS FILE!
+     11  10000 ????						;
+     12  10000 ????						; This file defines hardware registers and memory mapping for the
+     13  10000 ????						; Atari 2600. It is distributed as a companion machine-specific support package
+     14  10000 ????						; for the DASM compiler. Updates to this file, DASM, and associated tools are
+     15  10000 ????						; available at at http://www.atari2600.org/dasm
+     16  10000 ????						;
+     17  10000 ????						; Many thanks to the original author(s) of this file, and to everyone who has
+     18  10000 ????						; contributed to understanding the Atari 2600.  If you take issue with the
+     19  10000 ????						; contents, or naming of registers, please write to me (atari2600@taswegian.com)
+     20  10000 ????						; with your views.  Please contribute, if you think you can improve this
+     21  10000 ????						; file!
+     22  10000 ????						;
+     23  10000 ????						; Latest Revisions...
+     24  10000 ????						; 1.05  13/NOV/2003	  - Correction to 1.04 - now functions as requested by MR.
+     25  10000 ????						;			  - Added VERSION_VCS equate (which will reflect 100x version #)
+     26  10000 ????						;			    This will allow conditional code to verify VCS.H being
+     27  10000 ????						;			    used for code assembly.
+     28  10000 ????						; 1.04  12/NOV/2003	 Added TIA_BASE_WRITE_ADDRESS and TIA_BASE_READ_ADDRESS for
+     29  10000 ????						;			 convenient disassembly/reassembly compatibility for hardware
+     30  10000 ????						;			 mirrored reading/writing differences.	This is more a 
+     31  10000 ????						;			 readability issue, and binary compatibility with disassembled
+     32  10000 ????						;			 and reassembled sources.  Per Manuel Rotschkar's suggestion.
+     33  10000 ????						; 1.03  12/MAY/2003	 Added SEG segment at end of file to fix old-code compatibility
+     34  10000 ????						;			 which was broken by the use of segments in this file, as
+     35  10000 ????						;			 reported by Manuel Polik on [stella] 11/MAY/2003
+     36  10000 ????						; 1.02  22/MAR/2003	 Added TIMINT($285)
+     37  10000 ????						; 1.01				Constant offset added to allow use for 3F-style bankswitching
+     38  10000 ????						;						 - define TIA_BASE_ADDRESS as $40 for Tigervision carts, otherwise
+     39  10000 ????						;						   it is safe to leave it undefined, and the base address will
+     40  10000 ????						;						   be set to 0.  Thanks to Eckhard Stolberg for the suggestion.
+     41  10000 ????						;			    Note, may use -DLABEL=EXPRESSION to define TIA_BASE_ADDRESS
+     42  10000 ????						;			  - register definitions are now generated through assignment
+     43  10000 ????						;			    in uninitialised segments.	This allows a changeable base
+     44  10000 ????						;			    address architecture.
+     45  10000 ????						; 1.0	22/MAR/2003		Initial release
+     46  10000 ????
+     47  10000 ????
+     48  10000 ????						;-------------------------------------------------------------------------------
+     49  10000 ????
+     50  10000 ????						; TIA_BASE_ADDRESS
+     51  10000 ????						; The TIA_BASE_ADDRESS defines the base address of access to TIA registers.
+     52  10000 ????						; Normally 0, the base address should (externally, before including this file)
+     53  10000 ????						; be set to $40 when creating 3F-bankswitched (and other?) cartridges.
+     54  10000 ????						; The reason is that this bankswitching scheme treats any access to locations
+     55  10000 ????						; < $40 as a bankswitch.
+     56  10000 ????
+     57  10000 ????			   -	       IFNCONST	TIA_BASE_ADDRESS
+     58  10000 ????			   -TIA_BASE_ADDRESS =	0
+     59  10000 ????				       ENDIF
+     60  10000 ????
+     61  10000 ????						; Note: The address may be defined on the command-line using the -D switch, eg:
+     62  10000 ????						; dasm.exe code.asm -DTIA_BASE_ADDRESS=$40 -f3 -v5 -ocode.bin
+     63  10000 ????						; *OR* by declaring the label before including this file, eg:
+     64  10000 ????						; TIA_BASE_ADDRESS = $40
+     65  10000 ????						;   include "vcs.h"
+     66  10000 ????
+     67  10000 ????						; Alternate read/write address capability - allows for some disassembly compatibility
+     68  10000 ????						; usage ; to allow reassembly to binary perfect copies).  This is essentially catering
+     69  10000 ????						; for the mirrored ROM hardware registers.
+     70  10000 ????
+     71  10000 ????						; Usage: As per above, define the TIA_BASE_READ_ADDRESS and/or TIA_BASE_WRITE_ADDRESS
+     72  10000 ????						; using the -D command-line switch, as required.  If the addresses are not defined, 
+     73  10000 ????						; they defaut to the TIA_BASE_ADDRESS.
+     74  10000 ????
+     75  10000 ????			   -	       IFNCONST	TIA_BASE_READ_ADDRESS
+     76  10000 ????			   -TIA_BASE_READ_ADDRESS =	TIA_BASE_ADDRESS
+     77  10000 ????				       ENDIF
+     78  10000 ????
+     79  10000 ????			   -	       IFNCONST	TIA_BASE_WRITE_ADDRESS
+     80  10000 ????			   -TIA_BASE_WRITE_ADDRESS =	TIA_BASE_ADDRESS
+     81  10000 ????				       ENDIF
+     82  10000 ????
+     83  10000 ????						;-------------------------------------------------------------------------------
+     84  10000 ????
+     85 U002d ????				      SEG.U	TIA_REGISTERS_WRITE
+     86 U0000					      ORG	TIA_BASE_WRITE_ADDRESS
+     87 U0000
+     88 U0000							; DO NOT CHANGE THE RELATIVE ORDERING OF REGISTERS!
+     89 U0000
+     90 U0000		       00	   VSYNC      ds	1	; $00	 0000 00x0   Vertical Sync Set-Clear
+     91 U0001		       00	   VBLANK     ds	1	; $01	 xx00 00x0   Vertical Blank Set-Clear
+     92 U0002		       00	   WSYNC      ds	1	; $02	 ---- ----   Wait for Horizontal Blank
+     93 U0003		       00	   RSYNC      ds	1	; $03	 ---- ----   Reset Horizontal Sync Counter
+     94 U0004		       00	   NUSIZ0     ds	1	; $04	 00xx 0xxx   Number-Size player/missle 0
+     95 U0005		       00	   NUSIZ1     ds	1	; $05	 00xx 0xxx   Number-Size player/missle 1
+     96 U0006		       00	   COLUP0     ds	1	; $06	 xxxx xxx0   Color-Luminance Player 0
+     97 U0007		       00	   COLUP1     ds	1	; $07	 xxxx xxx0   Color-Luminance Player 1
+     98 U0008		       00	   COLUPF     ds	1	; $08	 xxxx xxx0   Color-Luminance Playfield
+     99 U0009		       00	   COLUBK     ds	1	; $09	 xxxx xxx0   Color-Luminance Background
+    100 U000a		       00	   CTRLPF     ds	1	; $0A	 00xx 0xxx   Control Playfield, Ball, Collisions
+    101 U000b		       00	   REFP0      ds	1	; $0B	 0000 x000   Reflection Player 0
+    102 U000c		       00	   REFP1      ds	1	; $0C	 0000 x000   Reflection Player 1
+    103 U000d		       00	   PF0	      ds	1	; $0D	 xxxx 0000   Playfield Register Byte 0
+    104 U000e		       00	   PF1	      ds	1	; $0E	 xxxx xxxx   Playfield Register Byte 1
+    105 U000f		       00	   PF2	      ds	1	; $0F	 xxxx xxxx   Playfield Register Byte 2
+    106 U0010		       00	   RESP0      ds	1	; $10	 ---- ----   Reset Player 0
+    107 U0011		       00	   RESP1      ds	1	; $11	 ---- ----   Reset Player 1
+    108 U0012		       00	   RESM0      ds	1	; $12	 ---- ----   Reset Missle 0
+    109 U0013		       00	   RESM1      ds	1	; $13	 ---- ----   Reset Missle 1
+    110 U0014		       00	   RESBL      ds	1	; $14	 ---- ----   Reset Ball
+    111 U0015		       00	   AUDC0      ds	1	; $15	 0000 xxxx   Audio Control 0
+    112 U0016		       00	   AUDC1      ds	1	; $16	 0000 xxxx   Audio Control 1
+    113 U0017		       00	   AUDF0      ds	1	; $17	 000x xxxx   Audio Frequency 0
+    114 U0018		       00	   AUDF1      ds	1	; $18	 000x xxxx   Audio Frequency 1
+    115 U0019		       00	   AUDV0      ds	1	; $19	 0000 xxxx   Audio Volume 0
+    116 U001a		       00	   AUDV1      ds	1	; $1A	 0000 xxxx   Audio Volume 1
+    117 U001b		       00	   GRP0       ds	1	; $1B	 xxxx xxxx   Graphics Register Player 0
+    118 U001c		       00	   GRP1       ds	1	; $1C	 xxxx xxxx   Graphics Register Player 1
+    119 U001d		       00	   ENAM0      ds	1	; $1D	 0000 00x0   Graphics Enable Missle 0
+    120 U001e		       00	   ENAM1      ds	1	; $1E	 0000 00x0   Graphics Enable Missle 1
+    121 U001f		       00	   ENABL      ds	1	; $1F	 0000 00x0   Graphics Enable Ball
+    122 U0020		       00	   HMP0       ds	1	; $20	 xxxx 0000   Horizontal Motion Player 0
+    123 U0021		       00	   HMP1       ds	1	; $21	 xxxx 0000   Horizontal Motion Player 1
+    124 U0022		       00	   HMM0       ds	1	; $22	 xxxx 0000   Horizontal Motion Missle 0
+    125 U0023		       00	   HMM1       ds	1	; $23	 xxxx 0000   Horizontal Motion Missle 1
+    126 U0024		       00	   HMBL       ds	1	; $24	 xxxx 0000   Horizontal Motion Ball
+    127 U0025		       00	   VDELP0     ds	1	; $25	 0000 000x   Vertical Delay Player 0
+    128 U0026		       00	   VDELP1     ds	1	; $26	 0000 000x   Vertical Delay Player 1
+    129 U0027		       00	   VDELBL     ds	1	; $27	 0000 000x   Vertical Delay Ball
+    130 U0028		       00	   RESMP0     ds	1	; $28	 0000 00x0   Reset Missle 0 to Player 0
+    131 U0029		       00	   RESMP1     ds	1	; $29	 0000 00x0   Reset Missle 1 to Player 1
+    132 U002a		       00	   HMOVE      ds	1	; $2A	 ---- ----   Apply Horizontal Motion
+    133 U002b		       00	   HMCLR      ds	1	; $2B	 ---- ----   Clear Horizontal Move Registers
+    134 U002c		       00	   CXCLR      ds	1	; $2C	 ---- ----   Clear Collision Latches
+    135 U002d
+    136 U002d							;-------------------------------------------------------------------------------
+    137 U002d
+    138 U000e ????				      SEG.U	TIA_REGISTERS_READ
+    139 U0000					      ORG	TIA_BASE_READ_ADDRESS
+    140 U0000
+    141 U0000							;											bit 7	 bit 6
+    142 U0000		       00	   CXM0P      ds	1	; $00	     xx00 0000	     Read Collision  M0-P1   M0-P0
+    143 U0001		       00	   CXM1P      ds	1	; $01	     xx00 0000			     M1-P0   M1-P1
+    144 U0002		       00	   CXP0FB     ds	1	; $02	     xx00 0000			     P0-PF   P0-BL
+    145 U0003		       00	   CXP1FB     ds	1	; $03	     xx00 0000			     P1-PF   P1-BL
+    146 U0004		       00	   CXM0FB     ds	1	; $04	     xx00 0000			     M0-PF   M0-BL
+    147 U0005		       00	   CXM1FB     ds	1	; $05	     xx00 0000			     M1-PF   M1-BL
+    148 U0006		       00	   CXBLPF     ds	1	; $06	     x000 0000			     BL-PF   -----
+    149 U0007		       00	   CXPPMM     ds	1	; $07	     xx00 0000			     P0-P1   M0-M1
+    150 U0008		       00	   INPT0      ds	1	; $08	     x000 0000	     Read Pot Port 0
+    151 U0009		       00	   INPT1      ds	1	; $09	     x000 0000	     Read Pot Port 1
+    152 U000a		       00	   INPT2      ds	1	; $0A	     x000 0000	     Read Pot Port 2
+    153 U000b		       00	   INPT3      ds	1	; $0B	     x000 0000	     Read Pot Port 3
+    154 U000c		       00	   INPT4      ds	1	; $0C		x000 0000	 Read Input (Trigger) 0
+    155 U000d		       00	   INPT5      ds	1	; $0D		x000 0000	 Read Input (Trigger) 1
+    156 U000e
+    157 U000e							;-------------------------------------------------------------------------------
+    158 U000e
+    159 U0298 ????				      SEG.U	RIOT
+    160 U0280					      ORG	$280
+    161 U0280
+    162 U0280							; RIOT MEMORY MAP
+    163 U0280
+    164 U0280		       00	   SWCHA      ds	1	; $280      Port A data register for joysticks:
+    165 U0281							;			Bits 4-7 for player 1.  Bits 0-3 for player 2.
+    166 U0281
+    167 U0281		       00	   SWACNT     ds	1	; $281      Port A data direction register (DDR)
+    168 U0282		       00	   SWCHB      ds	1	; $282		Port B data (console switches)
+    169 U0283		       00	   SWBCNT     ds	1	; $283      Port B DDR
+    170 U0284		       00	   INTIM      ds	1	; $284		Timer output
+    171 U0285
+    172 U0285		       00	   TIMINT     ds	1	; $285
+    173 U0286
+    174 U0286							; Unused/undefined registers ($285-$294)
+    175 U0286
+    176 U0286		       00		      ds	1	; $286
+    177 U0287		       00		      ds	1	; $287
+    178 U0288		       00		      ds	1	; $288
+    179 U0289		       00		      ds	1	; $289
+    180 U028a		       00		      ds	1	; $28A
+    181 U028b		       00		      ds	1	; $28B
+    182 U028c		       00		      ds	1	; $28C
+    183 U028d		       00		      ds	1	; $28D
+    184 U028e		       00		      ds	1	; $28E
+    185 U028f		       00		      ds	1	; $28F
+    186 U0290		       00		      ds	1	; $290
+    187 U0291		       00		      ds	1	; $291
+    188 U0292		       00		      ds	1	; $292
+    189 U0293		       00		      ds	1	; $293
+    190 U0294
+    191 U0294		       00	   TIM1T      ds	1	; $294		set 1 clock interval
+    192 U0295		       00	   TIM8T      ds	1	; $295      set 8 clock interval
+    193 U0296		       00	   TIM64T     ds	1	; $296      set 64 clock interval
+    194 U0297		       00	   T1024T     ds	1	; $297      set 1024 clock interval
+    195 U0298
+    196 U0298							;-------------------------------------------------------------------------------
+    197 U0298							; The following required for back-compatibility with code which does not use
+    198 U0298							; segments.
+    199 U0298
+    200  0000 ????				      SEG
+    201  0000 ????
+    202  0000 ????						; EOF
+------- FILE C:\Users\jefma\Desktop\gaem\Assembly\3D\RunesOfMoria_src.a
+------- FILE macro.h LEVEL 2 PASS 2
+      0  0000 ????				      include	"macro.h"
+      1  0000 ????						; Provided under the CC0 license. See the included LICENSE.txt for details.
+      2  0000 ????
+      3  0000 ????						; MACRO.H
+      4  0000 ????						; Version 1.05, 13/NOVEMBER/2003
+      5  0000 ????
+      6  0000 ????	       00 69	   VERSION_MACRO =	105
+      7  0000 ????
+      8  0000 ????						;
+      9  0000 ????						; THIS FILE IS EXPLICITLY SUPPORTED AS A DASM-PREFERRED COMPANION FILE
+     10  0000 ????						; PLEASE DO *NOT* REDISTRIBUTE MODIFIED VERSIONS OF THIS FILE!
+     11  0000 ????						;
+     12  0000 ????						; This file defines DASM macros useful for development for the Atari 2600.
+     13  0000 ????						; It is distributed as a companion machine-specific support package
+     14  0000 ????						; for the DASM compiler. Updates to this file, DASM, and associated tools are
+     15  0000 ????						; available at at http://www.atari2600.org/dasm
+     16  0000 ????						;
+     17  0000 ????						; Many thanks to the people who have contributed.  If you take issue with the
+     18  0000 ????						; contents, or would like to add something, please write to me
+     19  0000 ????						; (atari2600@taswegian.com) with your contribution.
+     20  0000 ????						;
+     21  0000 ????						; Latest Revisions...
+     22  0000 ????						;
+     23  0000 ????						; 1.05  14/NOV/2003	  - Added VERSION_MACRO equate (which will reflect 100x version #)
+     24  0000 ????						;			    This will allow conditional code to verify MACRO.H being
+     25  0000 ????						;			    used for code assembly.
+     26  0000 ????						; 1.04  13/NOV/2003	 - SET_POINTER macro added (16-bit address load)
+     27  0000 ????						;
+     28  0000 ????						; 1.03  23/JUN/2003	 - CLEAN_START macro added - clears TIA, RAM, registers
+     29  0000 ????						;
+     30  0000 ????						; 1.02  14/JUN/2003	 - VERTICAL_SYNC macro added
+     31  0000 ????						;			   (standardised macro for vertical synch code)
+     32  0000 ????						; 1.01  22/MAR/2003	 - SLEEP macro added. 
+     33  0000 ????						;			 - NO_ILLEGAL_OPCODES switch implemented
+     34  0000 ????						; 1.0	22/MAR/2003		Initial release
+     35  0000 ????
+     36  0000 ????						; Note: These macros use illegal opcodes.  To disable illegal opcode usage, 
+     37  0000 ????						;   define the symbol NO_ILLEGAL_OPCODES (-DNO_ILLEGAL_OPCODES=1 on command-line).
+     38  0000 ????						;   If you do not allow illegal opcode usage, you must include this file 
+     39  0000 ????						;   *after* including VCS.H (as the non-illegal opcodes access hardware
+     40  0000 ????						;   registers and require them to be defined first).
+     41  0000 ????
+     42  0000 ????						; Available macros...
+     43  0000 ????						;   SLEEP n		 - sleep for n cycles
+     44  0000 ????						;   VERTICAL_SYNC	 - correct 3 scanline vertical synch code
+     45  0000 ????						;   CLEAN_START	 - set machine to known state on startup
+     46  0000 ????						;   SET_POINTER	 - load a 16-bit absolute to a 16-bit variable
+     47  0000 ????
+     48  0000 ????						;-------------------------------------------------------------------------------
+     49  0000 ????						; SLEEP duration
+     50  0000 ????						; Original author: Thomas Jentzsch
+     51  0000 ????						; Inserts code which takes the specified number of cycles to execute.	This is
+     52  0000 ????						; useful for code where precise timing is required.
+     53  0000 ????						; ILLEGAL-OPCODE VERSION DOES NOT AFFECT FLAGS OR REGISTERS.
+     54  0000 ????						; LEGAL OPCODE VERSION MAY AFFECT FLAGS
+     55  0000 ????						; Uses illegal opcode (DASM 2.20.01 onwards).
+     56  0000 ????
+     57  0000 ????				      MAC	sleep
+     58  0000 ????			   .CYCLES    SET	{1}
+     59  0000 ????
+     60  0000 ????				      IF	.CYCLES < 2
+     61  0000 ????				      ECHO	"MACRO ERROR: 'SLEEP': Duration must be > 1"
+     62  0000 ????				      ERR
+     63  0000 ????				      ENDIF
+     64  0000 ????
+     65  0000 ????				      IF	.CYCLES & 1
+     66  0000 ????				      IFNCONST	NO_ILLEGAL_OPCODES
+     67  0000 ????				      nop	0
+     68  0000 ????				      ELSE
+     69  0000 ????				      bit	VSYNC
+     70  0000 ????				      ENDIF
+     71  0000 ????			   .CYCLES    SET	.CYCLES - 3
+     72  0000 ????				      ENDIF
+     73  0000 ????
+     74  0000 ????				      REPEAT	.CYCLES / 2
+     75  0000 ????				      nop
+     76  0000 ????				      REPEND
+     77  0000 ????				      ENDM		;usage: SLEEP n (n>1)
+     78  0000 ????
+     79  0000 ????						;-------------------------------------------------------------------------------
+     80  0000 ????						; VERTICAL_SYNC
+     81  0000 ????						; Original author: Manuel Polik
+     82  0000 ????						; Inserts the code required for a proper 3 scannline 
+     83  0000 ????						; vertical sync sequence
+     84  0000 ????						;
+     85  0000 ????						; Note: Alters the accumulator
+     86  0000 ????						;
+     87  0000 ????						; IN:
+     88  0000 ????						; OUT: A = 1
+     89  0000 ????
+     90  0000 ????				      MAC	vertical_sync
+     91  0000 ????				      LDA	#$02	; A = VSYNC enable
+     92  0000 ????				      STA	WSYNC	; Finish current line
+     93  0000 ????				      STA	VSYNC	; Start vertical sync
+     94  0000 ????				      STA	WSYNC	; 1st line vertical sync
+     95  0000 ????				      STA	WSYNC	; 2nd line vertical sync
+     96  0000 ????				      LSR		; A = VSYNC disable
+     97  0000 ????				      STA	WSYNC	; 3rd line vertical sync
+     98  0000 ????				      STA	VSYNC	; Stop vertical sync
+     99  0000 ????				      ENDM
+    100  0000 ????
+    101  0000 ????						;-------------------------------------------------------------------------------
+    102  0000 ????						; CLEAN_START
+    103  0000 ????						; Original author: Andrew Davie
+    104  0000 ????						; Standardised start-up code, clears stack, all TIA registers and RAM to 0
+    105  0000 ????						; Sets stack pointer to $FF, and all registers to 0
+    106  0000 ????						; Sets decimal mode off, sets interrupt flag (kind of un-necessary)
+    107  0000 ????						; Use as very first section of code on boot (ie: at reset)
+    108  0000 ????						; Code written to minimise total ROM usage - uses weird 6502 knowledge :)
+    109  0000 ????
+    110  0000 ????				      MAC	clean_start
+    111  0000 ????				      sei
+    112  0000 ????				      cld
+    113  0000 ????
+    114  0000 ????				      ldx	#0
+    115  0000 ????				      txa
+    116  0000 ????				      tay
+    117  0000 ????			   .CLEAR_STACK dex
+    118  0000 ????				      txs
+    119  0000 ????				      pha
+    120  0000 ????				      bne	.CLEAR_STACK	; SP=$FF, X = A = Y = 0
+    121  0000 ????
+    122  0000 ????				      ENDM
+    123  0000 ????
+    124  0000 ????						;-------------------------------------------------------
+    125  0000 ????						; SET_POINTER
+    126  0000 ????						; Original author: Manuel Rotschkar
+    127  0000 ????						;
+    128  0000 ????						; Sets a 2 byte RAM pointer to an absolute address.
+    129  0000 ????						;
+    130  0000 ????						; Usage: SET_POINTER pointer, address
+    131  0000 ????						; Example: SET_POINTER SpritePTR, SpriteData
+    132  0000 ????						;
+    133  0000 ????						; Note: Alters the accumulator, NZ flags
+    134  0000 ????						; IN 1: 2 byte RAM location reserved for pointer
+    135  0000 ????						; IN 2: absolute address
+    136  0000 ????
+    137  0000 ????				      MAC	set_pointer
+    138  0000 ????			   .POINTER   SET	{1}
+    139  0000 ????			   .ADDRESS   SET	{2}
+    140  0000 ????
+    141  0000 ????				      LDA	#<.ADDRESS	; Get Lowbyte of Address
+    142  0000 ????				      STA	.POINTER	; Store in pointer
+    143  0000 ????				      LDA	#>.ADDRESS	; Get Hibyte of Address
+    144  0000 ????				      STA	.POINTER+1	; Store in pointer+1
+    145  0000 ????
+    146  0000 ????				      ENDM
+    147  0000 ????
+    148  0000 ????						; EOF
+------- FILE C:\Users\jefma\Desktop\gaem\Assembly\3D\RunesOfMoria_src.a
+      5  0000 ????				      include	"xmacro.h"
+      6  0000 ????
+      7  0000 ????	       00 00	   PAL	      EQU	0
+      8  0000 ????	       00 00	   DEBUG      EQU	0
+      9  0000 ????	       00 00	   HEX	      EQU	0
+     10  0000 ????
+     11  0000 ????						;==============================================================
+     12  0000 ????
+     13 U00e4 ????				      seg.u	Variables
+     14 U00e4 ????
+     15 U00e4 ????						; 32 bytes persistent game state
+     16 U00e4 ????
+     17 U0080					      org	$80
+     18 U0080		       00	   mapx       byte.b		; pointer to map lo (always 0)
+     19 U0081		       00	   mapxh      byte.b		; pointer to map hi
+     20 U0082		       00 00	   pos_x      word.w		; player position x
+     21 U0084
+     22 U0084		       00 00	   pos_y      word.w		; player position y
+     23 U0086		       00	   angle      byte.b		; player angle
+     24 U0087		       00	   x_tile     byte.b		; maps are tiled on a 4x4 grid
+     25 U0088
+     26 U0088		       00	   col	      byte.b		; screen col of current ray (0->31)
+     27 U0089		       00	   velocity   byte.b		; signed
+     28 U008a		       00	   keys       byte.b		; used by attract mode
+     29 U008b		       00	   block_index byte.b		; within 4x4 - 0..15
+     30 U008c
+     31 U008c		       00	   state      byte.b		; game state
+     32 U008d		       00	   seed_1     byte.b		; game random state seed
+     33 U008e		       00 00	   frames     word.w		; number of frames counted
+     34 U0090
+     35 U0090		       00	   fx	      byte.b		; fx to make
+     36 U0091		       00	   fxtimer    byte.b		; countdown timer for effect
+     37 U0092		       00	   music      byte.b		;
+     38 U0093		       00	   mtimer     byte.b
+     39 U0094
+     40 U0094		       00	   attract    byte.b		; only used in attract mode
+     41 U0095		       00	   atimer     byte.b
+     42 U0096		       00	   blocks_found byte.b
+     43 U0097		       00	   block_visible byte.b
+     44 U0098
+     45 U0098		       00	   blocks0    byte.b		;
+     46 U0099		       00	   blocks1    byte.b		;
+     47 U009a		       00	   flash      byte.b		;
+     48 U009b		       00	   triggers   byte.b		;
+     49 U009c
+     50 U009c		       00 00	   rays       word.w		; (DEBUG) number of rays cast / 32
+     51 U009e		       00	   bonked     byte.b
+     52 U009f
+     53 U009f							;==============================================================
+     54 U009f							;	Raycast frame buffer
+     55 U009f
+     56 U00a0					      org	$A0
+     57 U00a0
+     58 U00a0							;	52 bytes of 'frame buffer'
+     59 U00a0
+     60 U00a0							;	32 wall heights
+     61 U00a0		       00 00 00 00*W0	      .ds	32
+     62 U00c0
+     63 U00c0							;	color masks for display
+     64 U00c0							;	these are reversed every frame to blend colors
+     65 U00c0		       00	   m0_0       byte.b		; phase 0
+     66 U00c1		       00	   m1_0       byte.b
+     67 U00c2		       00	   m2_0       byte.b
+     68 U00c3		       00	   m3_0       byte.b
+     69 U00c4
+     70 U00c4		       00	   m0_1       byte.b
+     71 U00c5		       00	   m1_1       byte.b
+     72 U00c6		       00	   m2_1       byte.b
+     73 U00c7		       00	   m3_1       byte.b
+     74 U00c8
+     75 U00c8		       00	   m0	      byte.b		; byte buffers to make insertions faster/simpler
+     76 U00c9		       00	   m1	      byte.b
+     77 U00ca
+     78 U00ca		       00	   m0_2       byte.b		; phase 1
+     79 U00cb		       00	   m1_2       byte.b
+     80 U00cc		       00	   m2_2       byte.b
+     81 U00cd		       00	   m3_2       byte.b
+     82 U00ce
+     83 U00ce		       00	   m0_3       byte.b
+     84 U00cf		       00	   m1_3       byte.b
+     85 U00d0		       00	   m2_3       byte.b
+     86 U00d1		       00	   m3_3       byte.b
+     87 U00d2
+     88 U00d2		       00	   m2	      byte.b
+     89 U00d3		       00	   m3	      byte.b
+     90 U00d4
+     91 U00d4					      org	$D4
+     92 U00d4							;	40 bytes of Raycast Display Kernel Temporaries
+     93 U00d4							;	C3 stores prefligted last col
+     94 U00d4							;	extends to 0xFC - room for a teeny little stack...
+     95 U00d4
+     96 U00d4		       00 00 00 00*C3	      .ds	22	; fourth column of raster pix (display is 32*42)
+     97 U00ea
+     98 U00ea							;	16 bytes of line temps, used to draw to screen
+     99 U00ea							;	Each 4 lines we generate 8 bytes
+    100 U00ea
+    101 U00ea		       00	   p0_even    byte.b
+    102 U00eb		       00	   p1_even    byte.b
+    103 U00ec		       00	   p2_even    byte.b
+    104 U00ed		       00	   p3_even    byte.b
+    105 U00ee
+    106 U00ee		       00	   p0_odd     byte.b
+    107 U00ef		       00	   p1_odd     byte.b
+    108 U00f0		       00	   p2_odd     byte.b
+    109 U00f1		       00	   p3_odd     byte.b
+    110 U00f2
+    111 U00f2		       00	   p4_even    byte.b
+    112 U00f3		       00	   p5_even    byte.b
+    113 U00f4		       00	   p6_even    byte.b
+    114 U00f5		       00	   p7_even    byte.b
+    115 U00f6
+    116 U00f6		       00	   p4_odd     byte.b
+    117 U00f7		       00	   p5_odd     byte.b
+    118 U00f8		       00	   p6_odd     byte.b
+    119 U00f9		       00	   p7_odd     byte.b
+    120 U00fa
+    121 U00fa							; fg colors
+    122 U00fa		       00	   color_0    byte.b
+    123 U00fb		       00	   color_1    byte.b
+    124 U00fc							;color_2	byte
+    125 U00fc							;color_3	byte
+    126 U00fc
+    127 U00fc							;==============================================================
+    128 U00fc							;	raycast temps, used to draw to ray to 'frame buffer'
+    129 U00fc							;	move temps, used to do player movement
+    130 U00fc							;	extends to 0xFA - room for a little stack...
+    131 U00fc							;	42 bytes
+    132 U00fc
+    133 U00d4					      org	$D4
+    134 U00d4		       00 00	   step       word.w		; major step ,minor is always 0x100
+    135 U00d6		       00 00	   major      word.w		; major ddr sum
+    136 U00d8
+    137 U00d8		       00	   reor       byte.b		; mask for converting angle to step index
+    138 U00d9		       00	   rmap       byte.b		; offset into map data
+    139 U00da		       00	   dist       byte.b		; measured distance
+    140 U00db		       00	   wall       byte.b		; wall
+    141 U00dc
+    142 U00dc		       00	   minor_l    byte.b		; lo byte of minor ddr sum
+    143 U00dd		       00	   sx	      byte.b
+    144 U00de		       00	   sy	      byte.b
+    145 U00df		       00	   rpix       byte.b		;
+    146 U00e0
+    147 U00e0		       00	   rangle     byte.b		; angle of current ray
+    148 U00e1		       00	   rside      byte.b		; xmajor side flag
+    149 U00e2		       00	   rscale     byte.b		; log of ray scale factor
+    150 U00e3		       00	   rpos_major byte.b		; player pos based on angle quadrant
+    151 U00e4
+    152 U00e4							;==============================================================
+    153 U00e4							;	move temps
+    154 U00e4
+    155 U00e4		       00 00	   px	      word.w
+    156 U00e6		       00 00	   py	      word.w
+    157 U00e8		       00	   abs_velocity byte.b
+    158 U00e9		       00	   wall_hit   byte.b
+    159 U00ea
+    160 U00ea							;==============================================================
+    161 U00ea							;	Rune frame buffer & state
+    162 U00ea							;	this region accomodates 6*9 bytes required for
+    163 U00ea							;	rendering runes, plus rune specific state
+    164 U00ea							;	extends to 0xFA - room for a little stack...
+    165 U00ea							;	90 bytes
+    166 U00ea
+    167 U00a0					      org	$A0
+    168 U00a0							;
+    169 U00a0		       00	   seed_0     byte.b
+    170 U00a1		       00	   rune_win   byte.b
+    171 U00a2		       00	   rune_shadow byte.b		; rune anti-alias / shadow phase
+    172 U00a3		       00	   rune_loop  byte.b
+    173 U00a4
+    174 U00a4		       00	   rune_tmp   byte.b
+    175 U00a5		       00	   rune_index byte.b		; current 'more' index
+    176 U00a6		       00	   rune_pos   byte.b		; current selected letter
+    177 U00a7		       00	   rune_keys  byte.b		; debounce
+    178 U00a8
+    179 U00a8		       00	   rune_target byte.b		; target word we are looking for
+    180 U00a9		       00	   rune_errors byte.b		; number of incorrect letters
+    181 U00aa		       00	   rune_glow  byte.b
+    182 U00ab		       00	   rune_attract byte.b
+    183 U00ac
+    184 U00ac		       00 00 00 00*rune_chars .ds	6	; 60 bytes for rune state/bitmaps
+    185 U00b2		       00 00 00 00*rune_bits  .ds	6*11
+    186 U00f4
+    187 U00f4							;==============================================================
+    188 U00f4							; debug_hex
+    189 U00f4
+    190 U00d4					      org	$D4
+    191 U00d4		       00 00 00 00 nyb	      .ds	4
+    192 U00d8		       00	   line       byte.b
+    193 U00d9		       00	   hy	      byte.b
+    194 U00da		       00 00 00 00*char0      .ds	5
+    195 U00df		       00 00 00 00*char1      .ds	5
+    196 U00e4
+    197 U00e4
+    198 U00e4							;==============================================================
+    199 U00e4
+    200 U00e4		       00 80	   STATE_RAYCAST EQU	$80	; use raycast mode
+    201 U00e4		       00 40	   STATE_ATTRACT EQU	$40	; in attract mode
+    202 U00e4		       00 01	   STATE_PHASE EQU	$01	; instead of frames?
+    203 U00e4
+    204 U00e4							;==============================================================
+    205 U00e4
+    206 U00e4		       00 20	   MAXV       EQU	32
+    207 U00e4
+    208 U00e4				  -	      IF	PAL
+    209 U00e4				  -TOP_LINES  EQU	(37+25)
+    210 U00e4				  -BOTTOM_LINES EQU	(38+25)
+    211 U00e4				  -TOP_BORDER EQU	12
+    212 U00e4				  -BOTTOM_LINES_RUNES EQU	(31+25)
+    213 U00e4					      ELSE
+    214 U00e4		       00 26	   TOP_LINES  EQU	38
+    215 U00e4		       00 25	   BOTTOM_LINES EQU	37
+    216 U00e4		       00 05	   TOP_BORDER EQU	5
+    217 U00e4		       00 24	   BOTTOM_LINES_RUNES EQU	36
+    218 U00e4					      ENDIF
+    219 U00e4
+    220 U00e4		       00 fa	   color_2    EQU	color_0
+    221 U00e4		       00 fb	   color_3    EQU	color_1
+    222 U00e4
+    223 U00e4							;==============================================================
+    224 U00e4
+    225  10000 ????				       seg	Code
+    226  f000					      org	$f000
+    227  f000
+    228  f000							;==============================================================
+    229  f000							;	tables
+    230  f000							;==============================================================
+    231  f000							;	 basic rendering code is about .75k
+    232  f000							;	Kernel is ~.5k
+    233  f000							;	Log Tables are 640 bytes
+    234  f000							;	1k for maps?
+    235  f000
+    236  f000
+    237  f000					      ALIGN	256
+    238  f000							; nice little map of our world
+    239  f000							; 81 red
+    240  f000							; 82 green
+    241  f000							; 83 yellow
+    242  f000				   map
+    243  f000		       83 83 83 83*	      hex	8383838383839000908F908F908F908F
+    244  f010		       85 02 c0 02*	      hex	8502C00285608F000000000000000000
+    245  f020		       84 02 85 02*	      hex	840285028440408F908F838700878300
+    246  f030		       85 02 84 02*	      hex	85028402854088000000870000008700
+    247  f040		       84 01 85 01*	      hex	8401850184000000000000008C000000
+    248  f050		       85 01 84 01*	      hex	85018401018482820000870000008700
+    249  f060		       84 01 01 85*	      hex	84010185010000000000838700879291
+    250  f070		       92 82 01 00*	      hex	92820100840082820000820000920000
+    251  f080		       00 00 82 00*	      hex	00008200810081000083000000910091
+    252  f090		       92 00 82 00*	      hex	92008200900090008200008400840000
+    253  f0a0		       85 00 00 00*	      hex	85000000814081008300898584858900
+    254  f0b0		       86 8f 90 81*	      hex	868F9081404090408300000085000000
+    255  f0c0		       81 40 40 40*	      hex	81404040408140408385840084008485
+    256  f0d0		       85 40 81 40*	      hex	85408140814040908F00000085000000
+    257  f0e0		       81 60 60 88*	      hex	81606088404090000000898584858900
+    258  f0f0		       85 81 60 40*	      hex	85816040408F8F008F00000000000000
+    259  f100
+    260  f100
+    261  f100		       81 81 8f 90*	      hex	81818F908F9090009091929192919291
+    262  f110		       81 8c 00 00*	      hex	818C0000000090000000000000000000
+    263  f120		       92 00 00 87*	      hex	92000087870000908F91920000890000
+    264  f130		       91 00 87 60*	      hex	91008760408C00000000009289009100
+    265  f140		       92 00 87 8c*	      hex	9200878C400000860086000000009200
+    266  f150		       91 00 00 87*	      hex	91000087000087018601868600000000
+    267  f160		       92 00 00 00*	      hex	92000000000181020202010186009291
+    268  f170		       91 82 00 00*	      hex	91820000890102870287820100920000
+    269  f180		       00 00 82 00*	      hex	0000820089010202C002028200910082
+    270  f190		       91 00 82 00*	      hex	910082008901898702870281008A0000
+    271  f1a0		       83 00 82 00*	      hex	83008200814001020281018100008A00
+    272  f1b0		       85 00 00 88*	      hex	85000088404088810101000088008200
+    273  f1c0		       89 00 81 60*	      hex	89008160608100000081008100008200
+    274  f1d0		       88 00 00 81*	      hex	88000081880000908F00008800008A00
+    275  f1e0		       83 00 00 00*	      hex	830000000000900000008800008A0000
+    276  f1f0		       83 8b 00 8c*	      hex	838B008C008B8F008F88820000000000
+    277  f200
+    278  f200							; log2*32 128
+    279  f200				   _log2
+    280  f200		       00 00 20 32*	      hex	00002032404A525960656A6E7276797D
+    281  f210		       80 82 85 87*	      hex	808285878A8C8E9092949698999B9D9E
+    282  f220		       a0 a1 a2 a4*	      hex	A0A1A2A4A5A6A7A9AAABACADAEAFB0B1
+    283  f230		       b2 b3 b4 b5*	      hex	B2B3B4B5B6B7B8B9B9BABBBCBDBDBEBF
+    284  f240		       c0 c0 c1 c2*	      hex	C0C0C1C2C2C3C4C4C5C6C6C7C7C8C9C9
+    285  f250		       ca ca cb cc*	      hex	CACACBCCCCCDCDCECECFCFD0D0D1D1D2
+    286  f260		       d2 d3 d3 d4*	      hex	D2D3D3D4D4D5D5D5D6D6D7D7D8D8D9D9
+    287  f270		       d9 da da db*	      hex	D9DADADBDBDBDCDCDDDDDDDEDEDEDFDF
+    288  f280
+    289  f280							; pow(2,i/16) single byte 128
+    290  f280				   _exp16
+    291  f280		       01 01 01 01*	      hex	01010101010101010101010101010101
+    292  f290		       02 02 02 02*	      hex	02020202020202020203030303030303
+    293  f2a0		       04 04 04 04*	      hex	04040404040505050506060606070707
+    294  f2b0		       08 08 08 09*	      hex	08080809090A0A0B0B0C0C0D0D0E0E0F
+    295  f2c0		       10 11 11 12*	      hex	10111112131415161718191A1B1C1D1F
+    296  f2d0		       20 22 23 25*	      hex	2022232526282A2C2E30323436393B3E
+    297  f2e0		       41 44 47 4a*	      hex	4144474A4D5154585C6064696D72777D
+    298  f2f0		       82 88 8e 94*	      hex	82888E949BA2A9B1B8C1C9D2DBE5EFFA
+    299  f300
+    300  f300							; 128..255, low byte 128 but full range not used
+    301  f300				   _exp16l
+    302  f300		       05 11 1d 29*	      hex	05111D2937445362718293A5B7CBDFF5
+    303  f310		       0b 22 3a 53*	      hex	0B223A536E89A6C4E304264A6F96BFEA
+    304  f320		       16 44 75 a7*	      hex	164475A7DC134D89C7094D95DF2D7FD4
+    305  f330		       2c 89 ea 4f*	      hex	2C89EA4FB8279A128F129B2ABF5BFEA8
+    306  f340		       59 13 d4 9e*	      hex	5913D49E714E34241F253755	;7FB7FC50
+    307  f34c							;hex B326A93DE39C68483E4B6EAAFE6EF9A0
+    308  f34c							;hex 664C527AC638D0917D96DC54FDDCF241
+    309  f34c							;hex CD98A4F48D70A123FB2CB9A8FBB9E483
+    310  f34c
+    311  f34c							; log of step for stepping & multipling with player pos (101..0)
+    312  f34c				   _ray_step_log2
+    313  f34c		       65 4c 40 38*	      hex	654C4038322E2A2623211E1C1A181615
+    314  f35c		       13 12 10 0f*	      hex	1312100F0D0C0B090807060503020100
+    315  f36c
+    316  f36c							; log of distance scale factor (0..15)
+    317  f36c				   _ray_scale_log
+    318  f36c		       00 00 00 00*	      hex	00000000000000000101010102020203
+    319  f37c		       03 04 04 05*	      hex	030404050606070808090A0B0C0D0E0F
+    320  f38c
+    321  f38c							; log of fisheye adjustment to distance (32)
+    322  f38c				   _ray_fisheye
+    323  f38c		       03 02 02 02*	      hex	03020202010101010000000000000000
+    324  f39c		       00 00 00 00*	      hex	00000000000000000101010102020203
+    325  f3ac
+    326  f3ac							; cos (64) (could be log2 cos)
+    327  f3ac		       40 3f 3f 3f*_cos       hex	403F3F3F3F3F3F3F3E3E3E3D3D3C3C3B
+    328  f3bc		       3b 3a 39 39*	      hex	3B3A3939383736363534333231302F2E
+    329  f3cc		       2d 2c 2a 29*	      hex	2D2C2A29282726242322201F1E1C1B19
+    330  f3dc		       18 17 15 14*	      hex	1817151412110F0E0C0A090706040301
+    331  f3ec
+    332  f3ec							; a table or two
+    333  f3ec		       01 ff ff 01 _sx_ym     byte.b	1,-1,-1,1
+    334  f3f0		       0f 0f ef ef _sy_ym     byte.b	15,15,-17,-17	; not 16, eliminates clc in ray loop
+    335  f3f4		       10 10 f0 f0 _sx_xm     byte.b	16,16,-16,-16	; xmajor, eliminates clc in ray loop
+    336  f3f8		       00 fe fe 00 _sy_xm     byte.b	0,-2,-2,0
+    337  f3fc		       ff ff 00 00*_rphase    hex	FFFF0000FFFF
+    338  f402		       00 ff 00 ff _rquad     hex	00FF00FF
+    339  f406
+    340  f406							; base height - walls are 0..22
+    341  f406				   _base
+    342  f406		       96 76 56 36*	      byte.b	160-10,128-10,96-10,64-10,32-10
+    343  f40b
+    344  f40b				   _sixteen
+    345  f40b		       00 10 20 30*	      hex	00102030405060708090A0B0C0D0E0F0
+    346  f41b
+    347  f41b		       3c 36 30 2a*_six       byte.b	60,54,48,42,36,30,24,18,12,6,0
+    348  f426
+    349  f426		       80 40 20 10*_mask      hex	8040201008040201	; bit index to mask
+    350  f42e
+    351  f42e		       00 80 c0 e0*_bar       hex	0080C0E0F0F8FCFE	; todo
+    352  f436		       00 01 03 07*	      hex	000103070F1F3F7F
+    353  f43e
+    354  f43e				  -_bar_c     IF	PAL
+    355  f43e				  -	      byte	$62,$44,$24,$34	; progress bar color
+    356  f43e					      ELSE
+    357  f43e		       44 26 16 d4	      byte.b	$44,$26,$16,$D4
+    358  f442					      ENDIF
+    359  f442
+    360  f442							;	---------------
+    361  f442							;	|   |G  |   |G  | 0123
+    362  f442							;	|   |	 |R  |R  |
+    363  f442							;	 ---------------
+    364  f442							;	|  R|G R|  R|G R| 4567
+    365  f442							;	|   |	 |R  |R  |
+    366  f442							;	 ---------------
+    367  f442							;	|   |G  |   |G  | 89AB
+    368  f442							;	|  G|	G|R G|R G|
+    369  f442							;	 ---------------
+    370  f442							;	|  R|G R|  R|G R| CDEF
+    371  f442							;	|  G|	G|R G|R G|
+    372  f442							;	 ---------------
+    373  f442
+    374  f442							;	0 0 -Black
+    375  f442							;	1 4 -DGreen
+    376  f442							;	2 8 -DRed
+    377  f442							;	3 C -DYellow
+    378  f442							;	4 1 -DRed
+    379  f442							;	5 5 -HYellow
+    380  f442							;	6 9 -Red
+    381  f442							;	7 D -YRed
+    382  f442							;	8 2 -DGreen
+    383  f442							;	9 6 -Green
+    384  f442							;	A A -LYellow
+    385  f442							;	B E -YGreen
+    386  f442							;	C 3 -DYellow
+    387  f442							;	D 7 -YGreen
+    388  f442							;	E B -YRed
+    389  f442							;	F F -Yellow
+    390  f442
+    391  f442							; two phases of color index to bitmap
+    392  f442							; [c2][c1][c0][side][field] lookup
+    393  f442
+    394  f442				   _pal 		; lighter/darker
+    395  f442							;hex 00000000	; black - not used
+    396  f442		       06 09 04 01	      hex	06090401	; 81 red
+    397  f446		       09 06 01 04	      hex	09060104	; 82 green
+    398  f44a		       0f 0f 05 05	      hex	0F0F0505	; 83 yellow
+    399  f44e		       0d 07 07 0d	      hex	0D07070D	; 84 yellow red - no shade
+    400  f452		       07 0d 0d 07	      hex	070D0D07	; 85 yellow green - no shade
+    401  f456		       03 0c 0c 03	      hex	030C0C03	; 86 darker yellow
+    402  f45a
+    403  f45a							; corners
+    404  f45a		       06 09 01 04	      hex	06090104	; 87 red/dk green
+    405  f45e		       06 09 05 05	      hex	06090505	; 88 red/dk yellow
+    406  f462		       09 06 04 01	      hex	09060401	; 89 green/dk red
+    407  f466		       09 06 05 05	      hex	09060505	; 8A green/dk yellow
+    408  f46a		       0f 0f 01 04	      hex	0F0F0104	; 8B yellow/dk green
+    409  f46e		       0f 0f 04 01	      hex	0F0F0401	; 8C yellow/dk red
+    410  f472
+    411  f472							; special
+    412  f472		       03 0c 0c 03	      hex	030C0C03	; 8D yellow special 1 - weirdly colored door blocks
+    413  f476		       0c 03 03 0c	      hex	0C03030C	; 8E yellow special 2
+    414  f47a
+    415  f47a							; wireframe - 16 bytes.
+    416  f47a		       02 08 04 01	      hex	02080401	; 8f wireframe red
+    417  f47e		       04 01 02 08	      hex	04010208	; 90 wireframe red
+    418  f482		       08 02 01 04	      hex	08020104	; 91 wireframe green
+    419  f486		       01 04 08 02	      hex	01040802	; 92 wireframe green
+    420  f48a
+    421  f48a							; palette
+    422  f48a							; 000000,ff0000,00ff00,ffff00,a1e000,e0a100,808000
+    423  f48a							; 804000,c04000,408000,40c000,80c000,c08000
+    424  f48a							; a0a082,818081,0000c0,0000e0,00007f
+    425  f48a
+    426  f48a				  -	      IF	PAL
+    427  f48a				  -_red       byte	$66,$A6,$96,$E6,$04,$62
+    428  f48a				  -_green     byte	$52,$34,$44,$D4,$02,$60
+    429  f48a					      ELSE
+    430  f48a		       36 66 a6 e6*_red       byte.b	$36,$66,$A6,$E6,$04,$32
+    431  f490		       c4 14 44 84*_green     byte.b	$C4,$14,$44,$84,$02,$30
+    432  f496					      ENDIF
+    433  f496
+    434  f496							; key inputs for attract mode
+    435  f496							; uses 0 at start of runes as terminator
+    436  f496							; right 0111 7
+    437  f496							; left  1011 B
+    438  f496							; fwd	 1110 E
+    439  f496							; rwd	 1101 D
+    440  f496				   _demo
+    441  f496		       72 e2 74 e6*	      byte.b	$72,$E2,$74,$E6,$72,$EC,$71,$F4,$E9
+    442  f49f
+    443  f49f				  -	      IF	HEX
+    444  f49f				  -runes
+    445  f49f				  -words
+    446  f49f				  -glyph
+    447  f49f				  -	      .byte	%11100100,%11101110,%10101110,%11101110,%11101110,%11101110,%11101100,%11101110
+    448  f49f				  -	      .byte	%10101100,%00100010,%10101000,%10000010,%10101010,%10101010,%10001010,%10001000
+    449  f49f				  -	      .byte	%10100100,%11101110,%11101110,%11100100,%11101110,%11101100,%10001010,%11001100
+    450  f49f				  -	      .byte	%10100100,%10000010,%00100010,%10100100,%10100010,%10101010,%10001010,%10001000
+    451  f49f				  -	      .byte	%11101110,%11101110,%00101110,%11100100,%11101110,%10101110,%11101100,%11101000
+    452  f49f					      ELSE
+    453  f49f
+    454  f49f				   runes		; 21x9 19 bytes
+    455  f49f		       00 00 00 10*	      hex	000000103810000000
+    456  f4a8		       e0 98 86 98*	      hex	E0988698E0988698E0
+    457  f4b1		       82 82 82 44*	      hex	828282444428281010
+    458  f4ba		       08 10 10 10*	      hex	081010101092543810
+    459  f4c3		       08 10 10 10*	      hex	081010101010101020
+    460  f4cc		       42 84 84 84*	      hex	42848484848488B0C0
+    461  f4d5		       80 80 80 86*	      hex	8080808698E08698E0
+    462  f4de		       44 aa 10 28*	      hex	44AA10284482442810
+    463  f4e7		       10 10 10 10*	      hex	101010103854549292
+    464  f4f0		       84 8a 90 a0*	      hex	848A90A0E0988698E0
+    465  f4f9		       08 10 10 50*	      hex	081010503814101020
+    466  f502		       82 82 82 8e*	      hex	8282828E92E2828282
+    467  f50b		       60 90 08 04*	      hex	609008040204089060
+    468  f514		       40 80 80 c0*	      hex	408080C0A090C8A494
+    469  f51d		       aa aa aa 54*	      hex	AAAAAA545454282828
+    470  f526		       08 10 10 28*	      hex	081010284482442810
+    471  f52f		       02 02 02 02*	      hex	020202020E32C2320E
+    472  f538		       02 02 02 02*	      hex	020202020202C2320E	; only used for thorin
+    473  f541		       38 44 82 82*	      hex	384482828282828282	; U -18
+    474  f54a		       0c 12 20 40*	      hex	0C122040FC4020120C	; E -19
+    475  f553		       30 48 04 02*	      hex	30480402FE80402418	; S -20
+    476  f55c
+    477  f55c							; https://www.tecendil.com/?q=balrog&mode=erebor
+    478  f55c
+    479  f55c		       01 02 03 04*words      byte.b	1, 2, 3, 4, 5, 0	; moria
+    480  f562		       01 04 08 0b*	      byte.b	1, 4, 8,11,12, 0	; mines
+    481  f568		       06 07 03 04*	      byte.b	6, 7, 3, 4, 8, 0	; durin
+    482  f56e		       09 05 0a 04*	      byte.b	9, 5,10, 4, 8, 0	; balin
+    483  f574
+    484  f574		       0d 04 01 0a*	      byte.b	13, 4, 1,10, 4, 0	; gimli
+    485  f57a		       11 02 03 04*	      byte.b	17, 2, 3, 4, 8, 0	; thorin
+    486  f580		       10 03 02 06*	      byte.b	16, 3, 2, 6, 2, 0	; frodo
+    487  f586		       09 04 0a 09*	      byte.b	9, 4,10, 9, 2, 0	; bilbo
+    488  f58c
+    489  f58c		       03 07 08 0b*	      byte.b	3, 7, 8,11,12, 0	; runes
+    490  f592		       0c 01 05 07*	      byte.b	12, 1, 5, 7,13, 0	; smaug
+    491  f598		       0c 05 07 03*	      byte.b	12, 5, 7, 3, 2, 8	; sauron
+    492  f59e		       0d 02 0a 0a*	      byte.b	13, 2,10,10, 7, 1	; gollum
+    493  f5a4
+    494  f5a4		       09 05 0a 03*	      byte.b	9, 5,10, 3, 2,13	; balrog
+    495  f5aa		       01 02 03 06*	      byte.b	1, 2, 3, 6, 2, 3	; mordor
+    496  f5b0		       0b 03 0b 09*	      byte.b	11, 3,11, 9, 2, 3	; erebor
+    497  f5b6		       01 04 11 03*	      byte.b	1, 4,17, 3, 4,10	; mithril
+    498  f5bc
+    499  f5bc							; english
+    500  f5bc		       09 12 05 13*	      byte.b	9,18, 5,19,20, 0	; runes
+    501  f5c2		       00 00 0f 06*	      byte.b	0, 0,15, 6 ,0, 0	; of
+    502  f5c8		       0e 0f 09 04*	      byte.b	14,15, 9, 4, 2, 0	; Moria
+    503  f5ce		       00 00 01 08*	      byte.b	0, 0, 1, 8, 0, 0	; by
+    504  f5d4		       09 0f 14 14*	      byte.b	9,15,20,20,18,14	; rossum
+    505  f5da
+    506  f5da							; nice dwarf tesselation
+    507  f5da				   glyph
+    508  f5da		       ff 54 00 fe*	      hex	FF5400FE01FC01F8
+    509  f5e2		       05 f0 06 e0*	      hex	05F006E09BC02C80
+    510  f5ea		       70 01 3c 01*	      hex	70013C011C4D3C61
+    511  f5f2		       30 61 20 61*	      hex	30612061007F6A00
+    512  f5fa		       7f 15 80 3f*	      hex	7F15803F481F440F
+    513  f602		       53 07 31 03*	      hex	530731036C011A00
+    514  f60a		       07 c0 1e 40*	      hex	07C01E409CD99CC3
+    515  f612		       84 c3 80 c3*	      hex	84C380C300FFAB00
+    516  f61a					      ENDIF
+    517  f61a
+    518  f61a				   _map_pos
+    519  f61a		       f0 80 09 80*	      byte.b	>map,$80,9,$80,6,$92
+    520  f620
+    521  f620							; lotr theme
+    522  f620
+    523  f620		       00 08	   MS	      equ	8
+    524  f620		       00 00	   M1	      equ	0*32
+    525  f620		       00 20	   M4	      equ	1*32
+    526  f620		       00 40	   M6	      equ	2*32
+    527  f620		       00 60	   M8	      equ	3*32
+    528  f620		       00 80	   M16	      equ	4*32
+    529  f620		       00 0f	   MAXVOL     equ	15
+    530  f620
+    531  f620				   _lotr
+    532  f620		       77		      byte.b	23+M8
+    533  f621		       5a		      byte.b	26+M6
+    534  f622		       1a		      byte.b	26+M1
+    535  f623		       1a		      byte.b	26+M1
+    536  f624		       97		      byte.b	23+M16
+    537  f625
+    538  f625		       11		      byte.b	17+M1
+    539  f626		       0f		      byte.b	15+M1
+    540  f627		       4e		      byte.b	14+M6
+    541  f628		       0f		      byte.b	15+M1
+    542  f629		       11		      byte.b	17+M1
+    543  f62a		       53		      byte.b	19+M6
+    544  f62b		       11		      byte.b	17+M1
+    545  f62c		       0f		      byte.b	15+M1
+    546  f62d
+    547  f62d		       71		      byte.b	17+M8
+    548  f62e		       33		      byte.b	19+M4
+    549  f62f		       34		      byte.b	20+M4
+    550  f630		       00		      byte.b	0
+    551  f631
+    552  f631				  -	      IF	PAL
+    553  f631				  -_durs      byte	1*6,4*6,6*6,8*6,16*6
+    554  f631					      ELSE
+    555  f631		       08 20 30 40*_durs      byte.b	1*8,4*8,6*8,8*8,16*8
+    556  f636					      ENDIF
+    557  f636
+    558  f636		       08 08 0c 0c*_ctrl      byte.b	8 ,8,12,12, 3
+    559  f63b		       0c 0e 1f 18*_freq      byte.b	12,14,31,24,15
+    560  f640
+    561  f640							;==============================================================
+    562  f640							;	Moria
+    563  f640							;==============================================================
+    564  f640
+      0  f640				   Start      CLEAN_START
+      1  f640		       78		      sei
+      2  f641		       d8		      cld
+      3  f642
+      4  f642		       a2 00		      ldx	#0
+      5  f644		       8a		      txa
+      6  f645		       a8		      tay
+      7  f646		       ca	   .CLEAR_STACK dex
+      8  f647		       9a		      txs
+      9  f648		       48		      pha
+     10  f649		       d0 fb		      bne	.CLEAR_STACK
+     11  f64b
+    566  f64b		       a9 31		      lda	#$31
+    567  f64d		       85 0a		      sta	CTRLPF
+    568  f64f
+    569  f64f		       a2 05		      ldx	#5
+    570  f651		       bd 1a f6    .0	      lda	_map_pos,x
+    571  f654		       95 81		      sta	mapxh,x
+    572  f656		       ca		      dex
+    573  f657		       10 f8		      bpl	.0
+    574  f659
+    575  f659		       c6 98		      dec	blocks0	; set to $FF
+    576  f65b		       c6 99		      dec	blocks1	; set to $FF
+    577  f65d		       e6 8d		      inc	seed_1	; game seed set on first button
+    578  f65f
+    579  f65f		       a9 40		      lda	#STATE_ATTRACT
+    580  f661				  -	      IF	DEBUG
+    581  f661				  -	      lda	#STATE_RAYCAST
+    582  f661					      ENDIF
+    583  f661		       85 8c		      sta	state	; enter vsync
+    584  f663
+    585  f663							;==============================================================
+    586  f663							;	handle vsync, audio
+    587  f663
+    588  f663				   vsync      SUBROUTINE
+    589  f663		       a9 02		      lda	#2
+    590  f665		       85 02		      sta	WSYNC	;
+    591  f667		       85 00		      sta	VSYNC
+    592  f669		       a9 02		      lda	#(2*76)/64
+    593  f66b		       8d 96 02 	      sta	TIM64T	; to sync at end of VSYNC
+    594  f66e
+    595  f66e							; a little win flash
+    596  f66e
+    597  f66e		       a6 9a		      ldx	flash
+    598  f670		       f0 02		      beq	.0
+    599  f672		       c6 9a		      dec	flash
+    600  f674				   .0
+    601  f674							;==============================================================
+    602  f674							; lotr music player 46 + 17 bytes
+    603  f674							; https://alienbill.com/2600/atari-sound-forger/
+    604  f674							; is super handy
+    605  f674
+    606  f674		       24 8c		      bit	state	; play music in attract mode?
+    607  f676		       50 33		      bvc	.fx
+    608  f678
+    609  f678		       a6 93		      ldx	mtimer
+    610  f67a		       f0 0b		      beq	.e
+    611  f67c		       ca		      dex
+    612  f67d		       86 93		      stx	mtimer
+    613  f67f
+    614  f67f		       e0 0f		      cpx	#MAXVOL
+    615  f681		       b0 28		      bcs	.fx
+    616  f683		       86 19		      stx	AUDV0
+    617  f685		       90 24		      bcc	.fx
+    618  f687
+    619  f687		       a6 92	   .e	      ldx	music	; get the next note
+    620  f689		       bd 20 f6 	      lda	_lotr,x
+    621  f68c		       d0 04		      bne	.f
+    622  f68e		       aa		      tax
+    623  f68f		       ad 20 f6 	      lda	_lotr	; loop
+    624  f692		       e8	   .f	      inx
+    625  f693		       86 92		      stx	music
+    626  f695
+    627  f695		       a0 0c		      ldy	#12	; maybe play 6 at endgame?
+    628  f697		       84 15		      sty	AUDC0	; 3 is flangy and cool, 6 is dark, 12 is pure
+    629  f699		       85 17		      sta	AUDF0	; play it
+    630  f69b		       2a		      rol
+    631  f69c		       2a		      rol
+    632  f69d		       2a		      rol
+    633  f69e		       2a		      rol
+    634  f69f		       29 07		      and	#7
+    635  f6a1		       aa		      tax
+    636  f6a2		       bd 31 f6 	      lda	_durs,x
+    637  f6a5		       85 93		      sta	mtimer
+    638  f6a7		       a9 0f		      lda	#MAXVOL
+    639  f6a9		       85 19		      sta	AUDV0
+    640  f6ab
+    641  f6ab							;==============================================================
+    642  f6ab							; sound fx
+    643  f6ab
+    644  f6ab		       a7 91	   .fx	      lax	fxtimer
+    645  f6ad		       f0 0b		      beq	.snd
+    646  f6af		       ca		      dex
+    647  f6b0		       86 91		      stx	fxtimer
+    648  f6b2
+    649  f6b2		       c9 05		      cmp	#5
+    650  f6b4		       10 23		      bpl	.drone
+    651  f6b6		       86 1a		      stx	AUDV1
+    652  f6b8		       90 1f		      bcc	.drone	; always
+    653  f6ba
+    654  f6ba		       a5 90	   .snd       lda	fx
+    655  f6bc		       d0 08		      bne	.play
+    656  f6be
+    657  f6be		       a5 89	   .feet      lda	velocity	; footsteps
+    658  f6c0		       f0 17		      beq	.drone	; dont start another
+    659  f6c2		       a9 01		      lda	#1
+    660  f6c4		       25 8e		      and	frames
+    661  f6c6
+    662  f6c6		       aa	   .play      tax		; index of effect to play
+    663  f6c7		       bd 36 f6 	      lda	_ctrl,x
+    664  f6ca		       85 16		      sta	AUDC1
+    665  f6cc		       bd 3b f6 	      lda	_freq,x
+    666  f6cf		       85 18		      sta	AUDF1
+    667  f6d1		       a9 10		      lda	#16
+    668  f6d3		       85 91		      sta	fxtimer	; zero vol to start
+    669  f6d5		       a9 00		      lda	#0
+    670  f6d7		       85 90		      sta	fx
+    671  f6d9
+    672  f6d9							; make a droning sound near doors
+    673  f6d9		       a5 97	   .drone     lda	block_visible	; only if door is visible
+    674  f6db		       f0 16		      beq	.quiet
+    675  f6dd		       24 8c		      bit	state
+    676  f6df		       10 12		      bpl	.quiet	; and in raycast
+    677  f6e1		       a9 07		      lda	#7	; droning volume
+    678  f6e3		       25 9b		      and	triggers
+    679  f6e5		       f0 0c		      beq	.quiet
+    680  f6e7
+    681  f6e7		       4a	   .v2	      lsr
+    682  f6e8		       85 19		      sta	AUDV0	; play a droning sound near doors
+    683  f6ea		       a9 0f		      lda	#15
+    684  f6ec		       85 15		      sta	AUDC0
+    685  f6ee		       0a		      asl
+    686  f6ef		       85 17		      sta	AUDF0	; droning sound
+    687  f6f1		       d0 08		      bne	.finish
+    688  f6f3
+    689  f6f3		       24 8c	   .quiet     bit	state
+    690  f6f5		       70 04		      bvs	.finish	; don't silence music
+    691  f6f7		       a9 00		      lda	#0
+    692  f6f9		       85 19		      sta	AUDV0
+    693  f6fb
+    694  f6fb		       ae 84 02    .finish    ldx	INTIM	; wait until ready
+    695  f6fe		       10 fb		      bpl	.finish
+    696  f700
+    697  f700		       a2 00		      ldx	#0
+    698  f702		       86 02		      stx	WSYNC
+    699  f704		       86 00		      stx	VSYNC
+    700  f706		       a6 9a		      ldx	flash
+    701  f708		       86 08		      stx	COLUPF	;
+    702  f70a
+    703  f70a		       24 8c		      bit	state
+    704  f70c		       30 03		      bmi	raycaster
+    705  f70e		       4c aa fb 	      jmp	rune_kernel
+    706  f711
+    707  f711							;==============================================================
+    708  f711							;	Raycaster
+    709  f711							;==============================================================
+    710  f711
+    711  f711				   raycaster  SUBROUTINE
+    712  f711		       a9 2d		      lda	#(TOP_LINES*76)/64	; lines of VBLANK
+    713  f713		       8d 96 02 	      sta	TIM64T	; time we can run for
+    714  f716
+    715  f716							; force colors in scary parts
+    716  f716		       24 9b		      bit	triggers
+    717  f718		       10 0a		      bpl	.2
+    718  f71a		       a2 04		      ldx	#4	; darken
+    719  f71c		       a0 04		      ldy	#4
+    720  f71e		       50 0d		      bvc	.c
+    721  f720		       e8		      inx		; balrog
+    722  f721		       c8		      iny
+    723  f722		       70 09		      bvs	.c
+    724  f724
+    725  f724							; setup colors for this frame (switch every frame)
+    726  f724							; colors change when moving maps
+    727  f724		       a7 8b	   .2	      lax	block_index
+    728  f726		       4a		      lsr
+    729  f727		       4a		      lsr
+    730  f728		       a8		      tay		; y tile indexes 'green'
+    731  f729		       8a		      txa
+    732  f72a		       29 03		      and	#$3
+    733  f72c		       aa		      tax		; x tile indexes 'red'
+    734  f72d
+    735  f72d		       a5 8e	   .c	      lda	frames
+    736  f72f		       6a		      ror
+    737  f730		       90 08		      bcc	.1
+    738  f732
+    739  f732		       bd 8a f4 	      lda	_red,x
+    740  f735		       be 90 f4 	      ldx	_green,y
+    741  f738		       d0 07		      bne	.colors
+    742  f73a
+    743  f73a		       bd 8a f4    .1	      lda	_red,x
+    744  f73d		       aa		      tax
+    745  f73e		       b9 90 f4 	      lda	_green,y
+    746  f741
+    747  f741				   .colors
+    748  f741		       85 fa		      sta	color_0
+    749  f743		       86 fb		      stx	color_1
+    750  f745							;sta color_2	; feature not used
+    751  f745							;stx color_3
+    752  f745
+    753  f745		       20 49 f9 	      jsr	ray	; draw some rays TODO after colors
+    754  f748
+    755  f748		       ad 84 02    .done2     lda	INTIM	; wait until ready
+    756  f74b		       10 fb		      bpl	.done2
+    757  f74d
+    758  f74d							; draw the progress bar
+    759  f74d		       a5 96		      lda	blocks_found
+    760  f74f		       29 0f		      and	#15
+    761  f751		       aa		      tax
+    762  f752		       bc 2e f4 	      ldy	_bar,x
+    763  f755		       e0 08		      cpx	#8
+    764  f757		       10 04		      bpl	.big
+    765  f759		       a9 00		      lda	#0
+    766  f75b		       f0 03		      beq	.ok
+    767  f75d		       98	   .big       tya
+    768  f75e		       a0 ff		      ldy	#$FF
+    769  f760
+    770  f760		       84 0f	   .ok	      sty	PF2
+    771  f762		       85 0e		      sta	PF1
+    772  f764
+    773  f764		       a9 00		      lda	#0
+    774  f766		       85 02		      sta	WSYNC
+    775  f768		       85 01		      sta	VBLANK	; Disable VBLANK early in v=0
+    776  f76a		       a0 02		      ldy	#2
+    777  f76c		       84 09		      sty	COLUBK	; grey progress bar
+    778  f76e		       a5 96		      lda	blocks_found
+    779  f770		       4a		      lsr
+    780  f771		       4a		      lsr
+    781  f772		       aa		      tax
+    782  f773		       bc 3e f4 	      ldy	_bar_c,x
+    783  f776		       84 08		      sty	COLUPF	; progress bar indicator
+    784  f778
+    785  f778		       20 2a fe 	      jsr	kernel	; gets here start of V=1
+    786  f77b
+    787  f77b							; new frame starts at the bottom of the screen
+    788  f77b							; as we enter VBLANK
+    789  f77b
+    790  f77b		       e6 8e		      inc	frames
+    791  f77d				  -	      IF	DEBUG
+    792  f77d				  -	      bne	.f
+    793  f77d				  -	      inc	frames+1
+    794  f77d				  -.f
+    795  f77d					      ENDIF
+    796  f77d
+    797  f77d							; do a little hex debug
+    798  f77d				  -	      IF	HEX
+    799  f77d				  -	      jsr	debug
+    800  f77d				  -	      lda	#((BOTTOM_LINES-21)*76)/64	; lines of VBLANK at bottom
+    801  f77d					      ELSE
+    802  f77d		       a9 2b		      lda	#(BOTTOM_LINES*76)/64	; lines of VBLANK at bottom
+    803  f77f					      ENDIF
+    804  f77f		       a2 02		      ldx	#2
+    805  f781		       85 01		      sta	VBLANK
+    806  f783		       8d 96 02 	      sta	TIM64T	; time we can run for
+    807  f786
+    808  f786							; reverse masks
+    809  f786		       a2 09		      ldx	#10-1
+    810  f788		       b5 c0	   .rev       lda	m0_0,x
+    811  f78a		       b4 ca		      ldy	m0_0+10,x
+    812  f78c		       95 ca		      sta	m0_0+10,x
+    813  f78e		       94 c0		      sty	m0_0,x
+    814  f790		       ca		      dex
+    815  f791		       10 f5		      bpl	.rev
+    816  f793
+    817  f793		       20 db f7 	      jsr	move	; takes n 5 lines
+    818  f796		       20 49 f9 	      jsr	ray	; actually do some drawing
+    819  f799
+    820  f799		       ad 84 02    .done3     lda	INTIM	; wait until ready
+    821  f79c		       10 fb		      bpl	.done3
+    822  f79e
+    823  f79e
+    824  f79e							;	All done. Time for next frame
+    825  f79e		       4c 63 f6 	      jmp	vsync	; start of 221
+    826  f7a1
+    827  f7a1							;==============================================================
+    828  f7a1
+    829  f7a1				   get_map    SUBROUTINE		; carry clear if you can go there
+    830  f7a1		       29 0f		      and	#$0F	; y
+    831  f7a3		       a8		      tay
+    832  f7a4		       8a		      txa
+    833  f7a5		       18		      clc
+    834  f7a6		       79 0b f4 	      adc	_sixteen,y
+    835  f7a9		       a8		      tay
+    836  f7aa		       b1 80		      lda	(mapx),y
+    837  f7ac		       10 16		      bpl	.trigger	; top bit clear
+    838  f7ae
+    839  f7ae		       2a		      rol
+    840  f7af		       10 0a		      bpl	.bonk	; normal colored block
+    841  f7b1
+    842  f7b1		       a6 97		      ldx	block_visible	; C0 block
+    843  f7b3		       d0 02		      bne	.rune	; disabled
+    844  f7b5		       18		      clc		; block is clear
+    845  f7b6		       60		      rts
+    846  f7b7				   .rune
+    847  f7b7		       a2 00		      ldx	#0	; enter rune stage
+    848  f7b9		       86 8c		      stx	state
+    849  f7bb				   .bonk
+    850  f7bb		       a2 00		      ldx	#0	; bonked
+    851  f7bd		       86 89		      stx	velocity
+    852  f7bf		       a2 02		      ldx	#2
+    853  f7c1		       86 90		      stx	fx
+    854  f7c3		       60		      rts
+    855  f7c4				   .trigger
+    856  f7c4		       2a		      rol		; shift for bit access
+    857  f7c5		       85 9b		      sta	triggers	; 7 bits of state at each block
+    858  f7c7		       29 40		      and	#$40
+    859  f7c9		       d0 01		      bne	.1	; balrog bits
+    860  f7cb		       60	   .0	      rts
+    861  f7cc
+    862  f7cc		       a5 97	   .1	      lda	block_visible
+    863  f7ce		       d0 fb		      bne	.0
+    864  f7d0		       85 91		      sta	fxtimer	; force fx
+    865  f7d2		       a9 06		      lda	#6	; balrog steal noise
+    866  f7d4		       85 90		      sta	fx
+    867  f7d6		       85 9a		      sta	flash
+    868  f7d8		       4c 2d f9 	      jmp	block_set	; balrog just reset a door
+    869  f7db
+    870  f7db							;==============================================================
+    871  f7db							;	move - check joysticks
+    872  f7db							;==============================================================
+    873  f7db
+    874  f7db
+    875  f7db				   move       SUBROUTINE
+    876  f7db							;bit INPT4
+    877  f7db
+    878  f7db							; handle attract mode demo playback
+    879  f7db
+    880  f7db		       24 8c		      bit	state	; STATE_ATTRACT?
+    881  f7dd		       50 22		      bvc	.live
+    882  f7df
+    883  f7df		       c6 95		      dec	atimer	; timer still running?
+    884  f7e1		       10 23		      bpl	.keys	; keep going
+    885  f7e3
+    886  f7e3		       a6 94		      ldx	attract
+    887  f7e5		       bd 96 f4 	      lda	_demo,x
+    888  f7e8		       f0 0f		      beq	.done	; finished with demo
+    889  f7ea
+    890  f7ea		       85 8a		      sta	keys	; get a new sample
+    891  f7ec		       e8		      inx
+    892  f7ed		       86 94		      stx	attract	; update player
+    893  f7ef		       29 0f		      and	#$F
+    894  f7f1		       aa		      tax
+    895  f7f2		       bd 0b f4 	      lda	_sixteen,x
+    896  f7f5		       85 95		      sta	atimer	; play another sample
+    897  f7f7		       d0 0d		      bne	.keys	; always
+    898  f7f9
+    899  f7f9		       85 95	   .done      sta	atimer
+    900  f7fb		       85 94		      sta	attract
+    901  f7fd		       a9 40		      lda	#STATE_ATTRACT	; back to runes
+    902  f7ff		       85 8c		      sta	state	;
+    903  f801
+    904  f801							; joystick input
+    905  f801
+    906  f801		       ad 80 02    .live      lda	SWCHA
+    907  f804		       85 8a		      sta	keys
+    908  f806
+    909  f806							; interpret keys
+    910  f806				   .keys
+    911  f806		       a2 00		      ldx	#0
+    912  f808		       24 8a		      bit	keys
+    913  f80a		       70 04		      bvs	.2	; 01000000
+    914  f80c		       c6 86		      dec	angle	; Left rotate
+    915  f80e
+    916  f80e		       24 8a		      bit	keys
+    917  f810		       30 02	   .2	      bmi	.3	; 10000000
+    918  f812		       e6 86		      inc	angle	; Right rotate
+    919  f814
+    920  f814		       a9 10	   .3	      lda	#%00010000	; Up
+    921  f816		       24 8a		      bit	keys
+    922  f818		       d0 02		      bne	.4
+    923  f81a		       a2 01		      ldx	#1
+    924  f81c
+    925  f81c		       a9 20	   .4	      lda	#%00100000	; Down
+    926  f81e		       24 8a		      bit	keys
+    927  f820		       d0 02		      bne	.5
+    928  f822		       a2 ff		      ldx	#-1
+    929  f824
+    930  f824							; lots of faffing to make velocity feel smooth
+    931  f824		       8a	   .5	      txa
+    932  f825		       d0 0b		      bne	.6
+    933  f827
+    934  f827		       a5 89		      lda	velocity	; not moving
+    935  f829		       f0 27		      beq	.9
+    936  f82b		       10 02		      bpl	.p
+    937  f82d		       e8		      inx
+    938  f82e		       e8		      inx
+    939  f82f		       ca	   .p	      dex		; round towards zero
+    940  f830		       d0 08		      bne	.pin	;
+    941  f832
+    942  f832		       45 89	   .6	      eor	velocity	; zero velocity when changing directions
+    943  f834		       10 04		      bpl	.pin	;
+    944  f836		       a9 00		      lda	#0
+    945  f838		       85 89		      sta	velocity
+    946  f83a
+    947  f83a		       8a	   .pin       txa
+    948  f83b		       18		      clc
+    949  f83c		       65 89		      adc	velocity
+    950  f83e		       10 08		      bpl	.8
+    951  f840
+    952  f840		       c9 e0		      cmp	#256-MAXV
+    953  f842		       b0 0a		      bcs	.7
+    954  f844		       a9 e0		      lda	#256-MAXV
+    955  f846		       d0 06		      bne	.7
+    956  f848		       c9 20	   .8	      cmp	#MAXV
+    957  f84a		       90 02		      bcc	.7
+    958  f84c		       a9 1f		      lda	#MAXV-1
+    959  f84e
+    960  f84e		       85 89	   .7	      sta	velocity	; pinned to +-31
+    961  f850		       d0 31		      bne	motion
+    962  f852		       4c 42 fb    .9	      jmp	reset	; check reset switch
+    963  f855
+    964  f855							;==============================================================
+    965  f855							;	move forward and backward
+    966  f855							;==============================================================
+    967  f855
+    968  f855							; multiply velocity by cosines in x,y
+    969  f855							; add to current player point
+    970  f855
+    971  f855				   delta      SUBROUTINE
+    972  f855		       84 e9		      sty	wall_hit	; tmp
+    973  f857
+    974  f857		       bc ac f3 	      ldy	_cos,x
+    975  f85a		       f0 15		      beq	.z
+    976  f85c
+    977  f85c		       a6 e8		      ldx	abs_velocity	; up to 31
+    978  f85e		       18		      clc
+    979  f85f		       b9 00 f2 	      lda	_log2,y
+    980  f862		       7d 00 f2 	      adc	_log2,x
+    981  f865		       6a		      ror
+    982  f866		       4a		      lsr
+    983  f867		       c9 28		      cmp	#40	; speed divider
+    984  f869		       90 06		      bcc	.z
+    985  f86b		       aa		      tax
+    986  f86c		       bd 58 f2 	      lda	_exp16-40,x	; speed divider
+    987  f86f		       b0 02		      bcs	.nz
+    988  f871
+    989  f871		       a9 00	   .z	      lda	#0
+    990  f873		       a6 e9	   .nz	      ldx	wall_hit
+    991  f875		       18		      clc
+    992  f876		       55 e5		      eor	px+1,x
+    993  f878		       75 82		      adc	pos_x,x
+    994  f87a		       95 e4		      sta	px,x
+    995  f87c		       b5 e5		      lda	px+1,x
+    996  f87e		       75 83		      adc	pos_x+1,x
+    997  f880		       95 e5		      sta	px+1,x
+    998  f882		       60		      rts
+    999  f883
+   1000  f883							; returns x cos index in X, y sin index in rangle
+   1001  f883
+   1002  f883				   motion     SUBROUTINE
+   1003  f883		       a2 00		      ldx	#0
+   1004  f885		       86 e9		      stx	wall_hit
+   1005  f887		       a5 89		      lda	velocity
+   1006  f889		       10 07		      bpl	.p
+   1007  f88b		       a2 80		      ldx	#$80
+   1008  f88d		       49 ff		      eor	#$FF
+   1009  f88f		       38		      sec
+   1010  f890		       69 00		      adc	#0	; abs(velocity) - going in reverse?
+   1011  f892		       85 e8	   .p	      sta	abs_velocity
+   1012  f894		       8a		      txa
+   1013  f895		       45 86		      eor	angle
+   1014  f897		       85 e0		      sta	rangle
+   1015  f899
+   1016  f899		       2a		      rol
+   1017  f89a		       2a		      rol
+   1018  f89b		       2a		      rol
+   1019  f89c		       18		      clc
+   1020  f89d		       29 03		      and	#$3	; invert if backwards TODO
+   1021  f89f		       a8		      tay		; y is quadrant index
+   1022  f8a0
+   1023  f8a0		       b9 ff f3 	      lda	_rphase+3,y	;
+   1024  f8a3		       85 e5		      sta	px+1	;
+   1025  f8a5		       b9 fe f3 	      lda	_rphase+2,y	;
+   1026  f8a8		       85 e7		      sta	py+1	; 0x00 or 0xFF based on quadant
+   1027  f8aa
+   1028  f8aa		       a5 e0		      lda	rangle
+   1029  f8ac		       59 02 f4 	      eor	_rquad,y
+   1030  f8af		       29 3f		      and	#$3F
+   1031  f8b1		       aa		      tax		; x index to cos
+   1032  f8b2		       49 3f		      eor	#$3F
+   1033  f8b4		       85 e0		      sta	rangle	; sin
+   1034  f8b6
+   1035  f8b6							; x cos index in X, y sin index in rangle
+   1036  f8b6
+   1037  f8b6							; px = pos_x + dx
+   1038  f8b6		       a0 00		      ldy	#0
+   1039  f8b8		       20 55 f8 	      jsr	delta
+   1040  f8bb
+   1041  f8bb							; py = pos_y + dy
+   1042  f8bb		       a0 02		      ldy	#2
+   1043  f8bd		       a6 e0		      ldx	rangle
+   1044  f8bf		       20 55 f8 	      jsr	delta
+   1045  f8c2
+   1046  f8c2							; check for collision with walls
+   1047  f8c2							; x_tile,y_tile positions are maintained separately
+   1048  f8c2
+   1049  f8c2				   .check_y
+   1050  f8c2		       a6 83		      ldx	pos_x+1
+   1051  f8c4		       a5 e7		      lda	py+1
+   1052  f8c6		       20 a1 f7 	      jsr	get_map
+   1053  f8c9		       90 02		      bcc	.y_ok
+   1054  f8cb		       b0 08		      bcs	.check_x
+   1055  f8cd
+   1056  f8cd							; no intersection, y step is good
+   1057  f8cd		       a5 e6	   .y_ok      lda	py
+   1058  f8cf		       85 84		      sta	pos_y
+   1059  f8d1		       a6 e7		      ldx	py+1
+   1060  f8d3		       86 85		      stx	pos_y+1
+   1061  f8d5
+   1062  f8d5				   .check_x
+   1063  f8d5		       a6 e5		      ldx	px+1
+   1064  f8d7		       a5 85		      lda	pos_y+1
+   1065  f8d9		       20 a1 f7 	      jsr	get_map
+   1066  f8dc		       90 02		      bcc	.x_ok
+   1067  f8de		       b0 1c		      bcs	.tile
+   1068  f8e0
+   1069  f8e0				   .x_ok		; no intersection, x step is good
+   1070  f8e0		       a5 e4		      lda	px
+   1071  f8e2		       85 82		      sta	pos_x
+   1072  f8e4		       a7 e5		      lax	px+1
+   1073  f8e6		       29 0f		      and	#$0F
+   1074  f8e8		       85 83		      sta	pos_x+1
+   1075  f8ea
+   1076  f8ea							; x wrapping needs y updates
+   1077  f8ea		       8a		      txa
+   1078  f8eb		       29 f0		      and	#$F0
+   1079  f8ed		       f0 0d		      beq	.tile
+   1080  f8ef		       10 07		      bpl	.pl
+   1081  f8f1		       c6 87		      dec	x_tile	; new tile h
+   1082  f8f3		       c6 85		      dec	pos_y+1
+   1083  f8f5		       4c fc f8 	      jmp	.tile
+   1084  f8f8		       e6 87	   .pl	      inc	x_tile	; new tile
+   1085  f8fa		       e6 85		      inc	pos_y+1
+   1086  f8fc
+   1087  f8fc							; update x_tile,y_tile,map
+   1088  f8fc							; map is x^y
+   1089  f8fc
+   1090  f8fc		       a5 85	   .tile      lda	pos_y+1
+   1091  f8fe		       4a		      lsr
+   1092  f8ff		       4a		      lsr
+   1093  f900		       aa		      tax
+   1094  f901		       4a		      lsr
+   1095  f902		       4a		      lsr
+   1096  f903		       45 87		      eor	x_tile
+   1097  f905		       29 01		      and	#1
+   1098  f907		       09 f0		      ora	#>map
+   1099  f909		       85 81		      sta	mapxh	; map is x_tile^y_tile
+   1100  f90b
+   1101  f90b							; finally make the block index
+   1102  f90b
+   1103  f90b		       8a		      txa
+   1104  f90c		       29 0c		      and	#$0C
+   1105  f90e		       85 8b		      sta	block_index
+   1106  f910		       a5 87		      lda	x_tile
+   1107  f912		       29 03		      and	#$03
+   1108  f914		       05 8b		      ora	block_index
+   1109  f916		       85 8b		      sta	block_index
+   1110  f918
+   1111  f918							; get the block bit
+   1112  f918
+   1113  f918		       20 20 f9 	      jsr	bit_init
+   1114  f91b		       35 98		      and	blocks0,x
+   1115  f91d		       85 97		      sta	block_visible
+   1116  f91f		       60		      rts
+   1117  f920
+   1118  f920				   bit_init   SUBROUTINE		; 16 bit indexed bitmap
+   1119  f920		       a5 8b		      lda	block_index
+   1120  f922		       4a		      lsr
+   1121  f923		       a8		      tay
+   1122  f924		       a2 00		      ldx	#0
+   1123  f926		       b0 01		      bcs	.cs
+   1124  f928		       e8		      inx
+   1125  f929		       b9 26 f4    .cs	      lda	_mask,y
+   1126  f92c		       60		      rts
+   1127  f92d
+   1128  f92d							; turn the block back on
+   1129  f92d				   block_set  SUBROUTINE
+   1130  f92d		       20 20 f9 	      jsr	bit_init
+   1131  f930		       85 97		      sta	block_visible
+   1132  f932		       c6 96		      dec	blocks_found
+   1133  f934		       15 98		      ora	blocks0,x
+   1134  f936		       95 98		      sta	blocks0,x
+   1135  f938		       60		      rts
+   1136  f939
+   1137  f939							; clear the block after decoding rune
+   1138  f939				   block_clear SUBROUTINE
+   1139  f939		       a9 00		      lda	#0
+   1140  f93b		       85 97		      sta	block_visible
+   1141  f93d		       e6 96		      inc	blocks_found
+   1142  f93f		       20 20 f9 	      jsr	bit_init
+   1143  f942		       49 ff		      eor	#$FF
+   1144  f944		       35 98		      and	blocks0,x
+   1145  f946		       95 98		      sta	blocks0,x
+   1146  f948		       60		      rts
+   1147  f949
+   1148  f949							;==============================================================
+   1149  f949							;	ray
+   1150  f949							;	render one or more rays
+   1151  f949							;	col	screen col (0->31)
+   1152  f949							;	setup ~2 line
+   1153  f949							;	each step takes roughly 1/2 a scanline at minimum
+   1154  f949							;	writeback ~2 lines
+   1155  f949							;==============================================================
+   1156  f949
+   1157  f949				   ray	      SUBROUTINE
+   1158  f949		       a5 85		      lda	pos_y+1	; this probably will get done in move TODO
+   1159  f94b		       29 0f		      and	#$0F
+   1160  f94d		       a8		      tay
+   1161  f94e		       a5 83		      lda	pos_x+1
+   1162  f950		       19 0b f4 	      ora	_sixteen,y
+   1163  f953		       85 d9		      sta	rmap	; establish our map pos
+   1164  f955
+   1165  f955		       a5 88		      lda	col
+   1166  f957		       29 1f		      and	#$1F
+   1167  f959		       4c 62 f9 	      jmp	.new_col	; re-entering
+   1168  f95c
+   1169  f95c				   ray_loop
+   1170  f95c							; get map step directions from angle
+   1171  f95c							; a has current angle to draw
+   1172  f95c		       a5 88		      lda	col	;
+   1173  f95e		       29 1f		      and	#$1F
+   1174  f960		       d0 0d		      bne	.col_ready	; col_ready
+   1175  f962
+   1176  f962				   .new_col
+   1177  f962		       85 88		      sta	col	; at col that needs an angle update
+   1178  f964
+   1179  f964		       18		      clc
+   1180  f965		       65 86		      adc	angle
+   1181  f967		       38		      sec
+   1182  f968		       e9 10		      sbc	#16	; angle of ray TODO
+   1183  f96a		       85 e0		      sta	rangle	; every 32
+   1184  f96c		       4c 75 f9 	      jmp	.new_octant	;
+   1185  f96f
+   1186  f96f				   .col_ready
+   1187  f96f		       a7 e0		      lax	rangle
+   1188  f971		       29 1f		      and	#$1F
+   1189  f973		       d0 5a		      bne	.octant_ready	;
+   1190  f975
+   1191  f975							; recalc after entering a new octant
+   1192  f975							; happens less often
+   1193  f975				   .new_octant
+   1194  f975		       18		      clc
+   1195  f976		       a5 e0		      lda	rangle
+   1196  f978		       29 e0		      and	#$E0
+   1197  f97a		       2a		      rol
+   1198  f97b		       2a		      rol
+   1199  f97c		       2a		      rol
+   1200  f97d		       aa		      tax		; quadrant index
+   1201  f97e
+   1202  f97e		       a0 3f		      ldy	#$3F	; setup angle index mask
+   1203  f980		       b0 02		      bcs	.p
+   1204  f982		       a0 00		      ldy	#0
+   1205  f984		       84 d8	   .p	      sty	reor
+   1206  f986		       2a		      rol
+   1207  f987		       a8		      tay		; octant index
+   1208  f988		       b9 26 f4 	      lda	_mask,y
+   1209  f98b		       29 66		      and	#$66	; bitmap of xmajors
+   1210  f98d		       d0 1c		      bne	.xmm
+   1211  f98f
+   1212  f98f				   .ymm
+   1213  f98f		       85 e1		      sta	rside	; flag xmajor or ymajor for side
+   1214  f991
+   1215  f991		       bd ec f3 	      lda	_sx_ym,x	; y major octant - TODO MERGE?
+   1216  f994		       85 dd		      sta	sx
+   1217  f996		       bd f0 f3 	      lda	_sy_ym,x
+   1218  f999		       85 de		      sta	sy
+   1219  f99b
+   1220  f99b		       bd fc f3 	      lda	_rphase,x	; player positon as starting point for ray
+   1221  f99e		       45 84		      eor	pos_y
+   1222  f9a0		       4a		      lsr
+   1223  f9a1		       a8		      tay
+   1224  f9a2
+   1225  f9a2		       bd fd f3 	      lda	_rphase+1,x
+   1226  f9a5		       45 82		      eor	pos_x
+   1227  f9a7		       a2 00		      ldx	#0
+   1228  f9a9		       f0 1a		      beq	.or	; always
+   1229  f9ab
+   1230  f9ab				   .xmm
+   1231  f9ab		       a0 01		      ldy	#1	; side flag
+   1232  f9ad		       84 e1		      sty	rside	; flag xmajor or ymajor for side
+   1233  f9af
+   1234  f9af		       bd f4 f3 	      lda	_sx_xm,x	; x major octant
+   1235  f9b2		       85 dd		      sta	sx
+   1236  f9b4		       bd f8 f3 	      lda	_sy_xm,x
+   1237  f9b7		       85 de		      sta	sy
+   1238  f9b9
+   1239  f9b9		       bd fd f3 	      lda	_rphase+1,x	; player positon as starting point for ray
+   1240  f9bc		       45 82		      eor	pos_x
+   1241  f9be		       4a		      lsr
+   1242  f9bf		       a8		      tay
+   1243  f9c0
+   1244  f9c0		       bd fc f3 	      lda	_rphase,x
+   1245  f9c3		       45 84		      eor	pos_y
+   1246  f9c5
+   1247  f9c5		       85 dc	   .or	      sta	minor_l	; player pos * minor step (i.e. 0x100)
+   1248  f9c7		       b9 00 f2 	      lda	_log2,y	; _log2[p>>1]
+   1249  f9ca		       4a		      lsr
+   1250  f9cb		       69 10		      adc	#16
+   1251  f9cd		       85 e3		      sta	rpos_major	; to be multiplied
+   1252  f9cf
+   1253  f9cf				   .octant_ready
+   1254  f9cf		       a5 e0		      lda	rangle
+   1255  f9d1		       45 d8		      eor	reor	; angle->index
+   1256  f9d3		       29 1f		      and	#$1F	; index of slope to draw
+   1257  f9d5		       aa		      tax
+   1258  f9d6
+   1259  f9d6							; get step sizes for the ray
+   1260  f9d6
+   1261  f9d6		       bc 4c f3 	      ldy	_ray_step_log2,x	;
+   1262  f9d9		       b9 00 f3 	      lda	_exp16l,y
+   1263  f9dc		       85 d4		      sta	step
+   1264  f9de		       b9 80 f2 	      lda	_exp16,y
+   1265  f9e1		       85 d5		      sta	step+1
+   1266  f9e3		       bd 6c f3 	      lda	_ray_scale_log,x	; scaled to normalize minor step to 0x100
+   1267  f9e6		       85 e2		      sta	rscale	; fisheye - scale
+   1268  f9e8
+   1269  f9e8							; multiply px or py by _ray_step_log2
+   1270  f9e8
+   1271  f9e8		       18		      clc
+   1272  f9e9		       a5 e3		      lda	rpos_major	; positon of player to be multiplied
+   1273  f9eb		       7d 4c f3 	      adc	_ray_step_log2,x	; scaled major step size (always > 0x100)
+   1274  f9ee		       30 09		      bmi	.large
+   1275  f9f0
+   1276  f9f0		       aa		      tax
+   1277  f9f1		       a9 00		      lda	#0
+   1278  f9f3		       bc 80 f2 	      ldy	_exp16,x	; return _exp16[i];
+   1279  f9f6		       4c 02 fa 	      jmp	.ok
+   1280  f9f9				   .large
+   1281  f9f9		       29 7f		      and	#$7F
+   1282  f9fb		       aa		      tax
+   1283  f9fc		       bd 80 f2 	      lda	_exp16,x	; TODO. we can eliminate these probably
+   1284  f9ff		       bc 00 f3 	      ldy	_exp16l,x	; return _exp16l[i] + (_exp16h[i]<<8);
+   1285  fa02				   .ok
+   1286  fa02		       85 d7		      sta	major+1	; major step size * player pos
+   1287  fa04		       84 d6		      sty	major
+   1288  fa06
+   1289  fa06							; raycast loop - this needs to be snappy
+   1290  fa06
+   1291  fa06		       a4 d9		      ldy	rmap	; pointer on our map
+   1292  fa08		       a2 00		      ldx	#0	; minor_h
+   1293  fa0a		       e4 d7		      cpx	major+1
+   1294  fa0c		       90 08		      bcc	.step_minor
+   1295  fa0e		       d0 15		      bne	.step_major
+   1296  fa10
+   1297  fa10		       a5 dc	   .xx	      lda	minor_l
+   1298  fa12		       c5 d6		      cmp	major	; compare low bytes
+   1299  fa14		       b0 0f		      bcs	.step_major
+   1300  fa16
+   1301  fa16				   .step_minor
+   1302  fa16		       98		      tya
+   1303  fa17		       65 dd		      adc	sx
+   1304  fa19		       a8		      tay
+   1305  fa1a		       b1 80		      lda	(mapx),y
+   1306  fa1c		       30 33		      bmi	.done_minor	; hit a wall in y
+   1307  fa1e
+   1308  fa1e							; 16 bit add in minor axis (always adding 0x100)
+   1309  fa1e		       e8	   .mi_vis    inx
+   1310  fa1f
+   1311  fa1f		       e4 d7		      cpx	major+1	; compare high bytes
+   1312  fa21		       90 f3		      bcc	.step_minor	; dxh < dyh
+   1313  fa23		       f0 eb		      beq	.xx	; rarely get here but branch always taken
+   1314  fa25
+   1315  fa25				   .step_major
+   1316  fa25		       98		      tya		; Step x direction
+   1317  fa26		       65 de		      adc	sy
+   1318  fa28		       a8		      tay
+   1319  fa29		       b1 80		      lda	(mapx),y
+   1320  fa2b		       30 14		      bmi	.done_major	; hit a wall in major axis
+   1321  fa2d
+   1322  fa2d							; 16 bit add dx, put dxh in x
+   1323  fa2d		       a5 d6	   .mj_vis    lda	major	; major += step
+   1324  fa2f		       65 d4		      adc	step
+   1325  fa31		       85 d6		      sta	major
+   1326  fa33		       a5 d7		      lda	major+1
+   1327  fa35		       65 d5		      adc	step+1
+   1328  fa37		       85 d7		      sta	major+1
+   1329  fa39
+   1330  fa39		       e4 d7		      cpx	major+1	; compare high bytes
+   1331  fa3b		       90 d9		      bcc	.step_minor	; dxh < dyh
+   1332  fa3d		       d0 e6		      bne	.step_major	; dyh > dxh
+   1333  fa3f		       f0 cf		      beq	.xx	; rarely get here but branch always taken
+   1334  fa41
+   1335  fa41				   .done_major
+   1336  fa41		       0a		      asl
+   1337  fa42		       10 05		      bpl	.v0
+   1338  fa44
+   1339  fa44		       20 53 fb 	      jsr	special
+   1340  fa47		       f0 e4		      beq	.mj_vis
+   1341  fa49
+   1342  fa49		       a4 d6	   .v0	      ldy	major
+   1343  fa4b		       a6 d7		      ldx	major+1
+   1344  fa4d		       09 01		      ora	#1	; wall bit #0 is hit major side
+   1345  fa4f		       d0 0a		      bne	distance	; always
+   1346  fa51
+   1347  fa51				   .done_minor
+   1348  fa51		       0a		      asl
+   1349  fa52		       10 05		      bpl	.v1
+   1350  fa54
+   1351  fa54		       20 53 fb 	      jsr	special
+   1352  fa57		       f0 c5		      beq	.mi_vis
+   1353  fa59				   .v1
+   1354  fa59							;ldx minor_h	; already in x
+   1355  fa59		       a4 dc		      ldy	minor_l
+   1356  fa5b
+   1357  fa5b							;==============================================================
+   1358  fa5b							;	this alone takes about 3 lines to calculate
+   1359  fa5b
+   1360  fa5b				   distance   SUBROUTINE
+   1361  fa5b		       45 e1		      eor	rside	; translate to side flag
+   1362  fa5d		       85 db		      sta	wall	; block we hit
+   1363  fa5f
+   1364  fa5f		       8a		      txa		; dist high in A
+   1365  fa60		       f0 2e		      beq	.draw	; if we are closer than a certain distance wall is full height
+   1366  fa62
+   1367  fa62							; range distance to < 128
+   1368  fa62
+   1369  fa62		       84 da		      sty	dist	; distance low
+   1370  fa64		       a0 01		      ldy	#1
+   1371  fa66		       d0 03		      bne	.7	; while (dist & 0xFF) {dist >>= 8; i++};
+   1372  fa68
+   1373  fa68		       c8	   .6	      iny
+   1374  fa69		       66 da		      ror	dist
+   1375  fa6b		       4a	   .7	      lsr
+   1376  fa6c		       d0 fa		      bne	.6
+   1377  fa6e
+   1378  fa6e		       66 da	   .4	      ror	dist	; range dist into 0..255
+   1379  fa70		       10 03		      bpl	.5	; cuts log2 table in half
+   1380  fa72		       c8		      iny
+   1381  fa73		       46 da		      lsr	dist	; 0..127
+   1382  fa75				   .5
+   1383  fa75							; calculate wall height from distance
+   1384  fa75
+   1385  fa75				   .project
+   1386  fa75		       a6 da		      ldx	dist
+   1387  fa77		       b9 06 f4 	      lda	_base,y	; i += [160,128,96,64,32,0][y]
+   1388  fa7a		       fd 00 f2 	      sbc	_log2,x	; i -= _log2[dist] // divide
+   1389  fa7d
+   1390  fa7d		       a4 88		      ldy	col	; y is now col index
+   1391  fa7f		       79 8c f3 	      adc	_ray_fisheye,y	; i += _ray_fisheye[col]
+   1392  fa82							;sec		; always clear, is ok
+   1393  fa82		       e5 e2		      sbc	rscale	; divide by dist ray_scale
+   1394  fa84		       4a		      lsr
+   1395  fa85		       aa		      tax		; log of height
+   1396  fa86		       38		      sec
+   1397  fa87		       a9 14		      lda	#20	; max height is 20
+   1398  fa89		       fd 80 f2 	      sbc	_exp16,x	; wall height value for renderer
+   1399  fa8c		       10 02		      bpl	.draw
+   1400  fa8e		       a9 00		      lda	#0	; wall is full height
+   1401  fa90
+   1402  fa90							; RAY IS CAST!
+   1403  fa90							; draw wall color into mask buffer at this col
+   1404  fa90
+   1405  fa90		       a6 88	   .draw      ldx	col	; x is now col index
+   1406  fa92		       95 a0		      sta	W0,x	; save height
+   1407  fa94
+   1408  fa94		       a5 8e		      lda	frames	; field index
+   1409  fa96		       6a		      ror
+   1410  fa97		       a5 db		      lda	wall
+   1411  fa99		       2a		      rol		; [color][side][field]
+   1412  fa9a		       a8		      tay		; palette index in y
+   1413  fa9b
+   1414  fa9b		       a9 08		      lda	#8
+   1415  fa9d		       cb 08		      sbx	#8	; bit 3 of col -> carry
+   1416  fa9f		       b9 3e f4 	      lda	_pal-4,y	; bit pattern of color
+   1417  faa2		       90 0f		      bcc	.rol
+   1418  faa4
+   1419  faa4		       6a		      ror
+   1420  faa5		       66 c8	   .ror       ror	m0
+   1421  faa7		       6a		      ror
+   1422  faa8		       66 c9		      ror	m1
+   1423  faaa		       6a		      ror
+   1424  faab		       66 d2		      ror	m2
+   1425  faad		       6a		      ror
+   1426  faae		       66 d3		      ror	m3
+   1427  fab0		       4c bf fa 	      jmp	.flush
+   1428  fab3
+   1429  fab3		       6a	   .rol       ror
+   1430  fab4		       26 c8		      rol	m0
+   1431  fab6		       6a		      ror
+   1432  fab7		       26 c9		      rol	m1
+   1433  fab9		       6a		      ror
+   1434  faba		       26 d2		      rol	m2
+   1435  fabc		       6a		      ror
+   1436  fabd		       26 d3		      rol	m3
+   1437  fabf
+   1438  fabf		       e6 88	   .flush     inc	col
+   1439  fac1		       a7 88		      lax	col
+   1440  fac3		       29 07		      and	#$7
+   1441  fac5		       d0 15		      bne	.next
+   1442  fac7
+   1443  fac7		       8a		      txa		; flush to mask every 8 cols
+   1444  fac8		       4a		      lsr
+   1445  fac9		       4a		      lsr
+   1446  faca		       4a		      lsr
+   1447  facb		       aa		      tax
+   1448  facc		       a5 c8		      lda	m0	; copy to main color masks every 8 bits
+   1449  face		       95 bf		      sta	m0_0-1,x
+   1450  fad0		       a5 c9		      lda	m1
+   1451  fad2		       95 c3		      sta	m0_1-1,x
+   1452  fad4		       a5 d2		      lda	m2
+   1453  fad6		       95 c9		      sta	m0_2-1,x
+   1454  fad8		       a5 d3		      lda	m3
+   1455  fada		       95 cd		      sta	m0_3-1,x
+   1456  fadc
+   1457  fadc							;	ready for more
+   1458  fadc		       e6 e0	   .next      inc	rangle
+   1459  fade
+   1460  fade				  -	      IF	DEBUG	; count full frames
+   1461  fade				  -	      lda	col
+   1462  fade				  -	      cmp	#32
+   1463  fade				  -	      bne	.r
+   1464  fade				  -	      inc	rays
+   1465  fade				  -	      bne	.r
+   1466  fade				  -	      inc	rays+1
+   1467  fade				  -.r
+   1468  fade					      ENDIF
+   1469  fade
+   1470  fade		       ae 84 02 	      ldx	INTIM	; render until we run out of time
+   1471  fae1		       e0 0a		      cpx	#10	; need this long worst case
+   1472  fae3		       30 03		      bmi	.exit
+   1473  fae5		       4c 5c f9 	      jmp	ray_loop	; still time for more
+   1474  fae8		       60	   .exit      rts
+   1475  fae9
+   1476  fae9							;==============================================================
+   1477  fae9							;==============================================================
+   1478  fae9							;	Rune selection
+   1479  fae9
+   1480  fae9				   rune_move  SUBROUTINE
+   1481  fae9		       24 0c		      bit	INPT4
+   1482  faeb		       30 0d		      bmi	.0
+   1483  faed
+   1484  faed		       a6 8d		      ldx	seed_1	; establish seed on first button push
+   1485  faef		       ca		      dex
+   1486  faf0		       d0 5a		      bne	play	; already initalized
+   1487  faf2
+   1488  faf2		       a5 8e		      lda	frames	; use first trigger as seed
+   1489  faf4		       09 01		      ora	#1
+   1490  faf6		       85 8d		      sta	seed_1	; must be non-zero
+   1491  faf8		       d0 52		      bne	play	;
+   1492  fafa
+   1493  fafa		       ad 80 02    .0	      lda	SWCHA
+   1494  fafd		       49 ff		      eor	#$FF	; 1 = on ffs
+   1495  faff		       aa		      tax
+   1496  fb00		       45 a7		      eor	rune_keys
+   1497  fb02		       86 a7		      stx	rune_keys
+   1498  fb04		       25 a7		      and	rune_keys	; down events
+   1499  fb06		       85 a4		      sta	rune_tmp
+   1500  fb08
+   1501  fb08		       29 f0		      and	#$F0
+   1502  fb0a		       f0 04		      beq	.mv
+   1503  fb0c		       a9 03		      lda	#3
+   1504  fb0e		       85 90		      sta	fx	; key sound
+   1505  fb10
+   1506  fb10		       a6 a6	   .mv	      ldx	rune_pos
+   1507  fb12
+   1508  fb12		       24 a4	   .1	      bit	rune_tmp
+   1509  fb14		       10 05		      bpl	.2	; 10000000 right
+   1510  fb16		       e0 05		      cpx	#5
+   1511  fb18		       f0 01		      beq	.2
+   1512  fb1a		       e8		      inx
+   1513  fb1b
+   1514  fb1b		       24 a4	   .2	      bit	rune_tmp
+   1515  fb1d		       50 05		      bvc	.3	; 01000000 left
+   1516  fb1f		       e0 00		      cpx	#0
+   1517  fb21		       f0 01		      beq	.3
+   1518  fb23		       ca		      dex
+   1519  fb24
+   1520  fb24		       b4 ac	   .3	      ldy	rune_chars,x
+   1521  fb26		       a9 20		      lda	#%00100000	; Down
+   1522  fb28		       24 a4		      bit	rune_tmp
+   1523  fb2a		       f0 05		      beq	.4
+   1524  fb2c		       88		      dey
+   1525  fb2d		       10 02		      bpl	.4
+   1526  fb2f		       a0 11		      ldy	#17
+   1527  fb31
+   1528  fb31		       a9 10	   .4	      lda	#%00010000	; Up
+   1529  fb33		       24 a4		      bit	rune_tmp
+   1530  fb35		       f0 07		      beq	.5
+   1531  fb37		       c8		      iny
+   1532  fb38		       c0 12		      cpy	#18
+   1533  fb3a		       d0 02		      bne	.5
+   1534  fb3c		       a0 00		      ldy	#0
+   1535  fb3e
+   1536  fb3e		       86 a6	   .5	      stx	rune_pos
+   1537  fb40		       94 ac		      sty	rune_chars,x
+   1538  fb42
+   1539  fb42		       ad 82 02    reset      lda	SWCHB	; check select and reset
+   1540  fb45		       4a		      lsr		; reset in carry
+   1541  fb46		       b0 03		      bcs	.6
+   1542  fb48		       4c 40 f6 	      jmp	Start	; reset
+   1543  fb4b		       60	   .6	      rts
+   1544  fb4c
+   1545  fb4c		       a9 80	   play       lda	#STATE_RAYCAST	; go play
+   1546  fb4e		       85 19		      sta	AUDV0
+   1547  fb50		       85 8c		      sta	state
+   1548  fb52		       60		      rts
+   1549  fb53
+   1550  fb53							; special block color
+   1551  fb53				   special    SUBROUTINE
+   1552  fb53		       a5 97		      lda	block_visible	; is the special block visible
+   1553  fb55		       f0 07		      beq	.0
+   1554  fb57		       a9 01		      lda	#1
+   1555  fb59		       25 88		      and	col
+   1556  fb5b		       0a		      asl
+   1557  fb5c		       69 1a		      adc	#26
+   1558  fb5e		       60	   .0	      rts
+   1559  fb5f
+   1560  fb5f							;==============================================================
+   1561  fb5f							;	Rune Kernel
+   1562  fb5f							;==============================================================
+   1563  fb5f
+   1564  fb5f				   rune_pal
+   1565  fb5f		       0e 00		      byte.b	$0E,$00
+   1566  fb61				   cartouche
+   1567  fb61		       06 0e 08 08	      byte.b	$06,$0E,$08,$08
+   1568  fb65		       00 02 04 06	      byte.b	$00,$02,$04,$06
+   1569  fb69
+   1570  fb69							; colors improve with more correct letters
+   1571  fb69				   glyph_c
+   1572  fb69				  -	      IF	PAL
+   1573  fb69				  -	      byte	$68,$BA	; beard,helm
+   1574  fb69				  -	      byte	$68,$BA
+   1575  fb69				  -	      byte	$68,$0A
+   1576  fb69				  -	      byte	$08,$0A
+   1577  fb69				  -	      byte	$06,$08
+   1578  fb69				  -	      byte	$04,$06
+   1579  fb69				  -	      byte	$02,$04
+   1580  fb69					      ELSE
+   1581  fb69		       38 9c		      byte.b	$38,$9C
+   1582  fb6b		       38 9c		      byte.b	$38,$9C
+   1583  fb6d		       38 0c		      byte.b	$38,$0C
+   1584  fb6f		       08 0c		      byte.b	$08,$0C
+   1585  fb71		       06 0a		      byte.b	$06,$0A
+   1586  fb73		       04 08		      byte.b	$04,$08
+   1587  fb75		       02 06		      byte.b	$02,$06
+   1588  fb77					      ENDIF
+   1589  fb77
+   1590  fb77				   border_bg  SUBROUTINE
+   1591  fb77		       24 81		      bit	mapxh	; F8
+   1592  fb79		       a2 03	   border     ldx	#4-1	; draw top of cartouche
+   1593  fb7b		       85 02	   .0	      sta	WSYNC
+   1594  fb7d		       b9 61 fb 	      lda	cartouche,y
+   1595  fb80		       88		      dey
+   1596  fb81		       70 08		      bvs	.1
+   1597  fb83		       85 08		      sta	COLUPF
+   1598  fb85		       a9 fc		      lda	#$FC	; Tight playfield around glyph
+   1599  fb87		       85 0f		      sta	PF2
+   1600  fb89		       50 02		      bvc	.2
+   1601  fb8b		       85 09	   .1	      sta	COLUBK
+   1602  fb8d		       ca	   .2	      dex
+   1603  fb8e		       10 eb		      bpl	.0
+   1604  fb90		       60		      rts
+   1605  fb91
+   1606  fb91				   clear      SUBROUTINE
+   1607  fb91		       85 02		      sta	WSYNC
+   1608  fb93		       85 25		      sta	VDELP0	; we need the VDEL registers
+   1609  fb95		       85 26		      sta	VDELP1	; so we can do our 4-store trick
+   1610  fb97		       a9 00		      lda	#0
+   1611  fb99		       85 1b		      sta	GRP0
+   1612  fb9b		       85 1c		      sta	GRP1
+   1613  fb9d		       85 1b		      sta	GRP0
+   1614  fb9f		       60		      rts
+   1615  fba0
+   1616  fba0				   rnd0       SUBROUTINE
+   1617  fba0		       a5 a0	   .rnd       lda	seed_0	; get a rand
+   1618  fba2		       0a		      asl
+   1619  fba3		       90 02		      bcc	.eor
+   1620  fba5		       49 cf		      eor	#$CF
+   1621  fba7		       85 a0	   .eor       sta	seed_0
+   1622  fba9		       60		      rts
+   1623  fbaa
+   1624  fbaa				   rune_kernel SUBROUTINE
+   1625  fbaa		       85 02	   .ws	      sta	WSYNC
+   1626  fbac		       a9 2d		      lda	#(TOP_LINES*76)/64
+   1627  fbae		       8d 96 02 	      sta	TIM64T	; at line -37
+   1628  fbb1
+   1629  fbb1		       e6 8e		      inc	frames
+   1630  fbb3		       a5 8e		      lda	frames	; extra clock for positioning
+   1631  fbb5		       29 01		      and	#1
+   1632  fbb7		       85 a2		      sta	rune_shadow
+   1633  fbb9
+   1634  fbb9		       a9 03		      lda	#%011	; 3 copies of sprites for glyph and runes
+   1635  fbbb		       85 04		      sta	NUSIZ0
+   1636  fbbd		       85 05		      sta	NUSIZ1
+   1637  fbbf
+   1638  fbbf		       a2 10		      ldx	#$10	; setup 48 byte spite positions
+   1639  fbc1		       86 20		      stx	HMP0
+   1640  fbc3		       a2 20		      ldx	#$20
+   1641  fbc5		       86 21		      stx	HMP1
+   1642  fbc7		       85 10		      sta	RESP0	; position 1st player
+   1643  fbc9		       85 11		      sta	RESP1	; ...and 2nd player
+   1644  fbcb
+   1645  fbcb							; commit 48 bit sprite positions
+   1646  fbcb		       85 02		      sta	WSYNC	; start a new line
+   1647  fbcd		       85 2a		      sta	HMOVE	; Sprites are set
+   1648  fbcf
+   1649  fbcf							;==============================================================
+   1650  fbcf							; update timers and state
+   1651  fbcf
+   1652  fbcf		       a9 01		      lda	#1	; or zero?
+   1653  fbd1		       24 8c		      bit	state
+   1654  fbd3		       d0 33		      bne	.inited
+   1655  fbd5
+   1656  fbd5							; init state if required
+   1657  fbd5
+   1658  fbd5		       e6 8c		      inc	state
+   1659  fbd7		       85 8e		      sta	frames
+   1660  fbd9		       4a		      lsr
+   1661  fbda		       85 93		      sta	mtimer
+   1662  fbdc		       85 a1		      sta	rune_win
+   1663  fbde		       85 a9		      sta	rune_errors
+   1664  fbe0
+   1665  fbe0		       a9 06		      lda	#6
+   1666  fbe2		       85 aa		      sta	rune_glow
+   1667  fbe4
+   1668  fbe4		       a9 10		      lda	#16
+   1669  fbe6		       85 92		      sta	music
+   1670  fbe8		       85 ab		      sta	rune_attract	; "runes of moria by rossum"
+   1671  fbea
+   1672  fbea		       a5 8d		      lda	seed_1	;
+   1673  fbec		       45 8b		      eor	block_index
+   1674  fbee		       09 01		      ora	#1	; non-zero force
+   1675  fbf0		       85 a0		      sta	seed_0
+   1676  fbf2		       29 0f		      and	#$F
+   1677  fbf4		       85 a8		      sta	rune_target
+   1678  fbf6
+   1679  fbf6							; randomize rune letters
+   1680  fbf6		       a0 05		      ldy	#5
+   1681  fbf8		       20 a0 fb    .rnd       jsr	rnd0
+   1682  fbfb		       59 ac 00 	      eor	rune_chars,y
+   1683  fbfe		       29 0f		      and	#$F
+   1684  fc00		       f0 f6		      beq	.rnd	; don't use 0
+   1685  fc02		       99 ac 00 	      sta	rune_chars,y
+   1686  fc05		       88		      dey
+   1687  fc06		       10 f0		      bpl	.rnd
+   1688  fc08
+   1689  fc08				  -	      IF	DEBUG
+   1690  fc08				  -	      ldx	#0
+   1691  fc08				  -	      lda	rune_target
+   1692  fc08				  -	      jsr	rune_word
+   1693  fc08					      ENDIF
+   1694  fc08
+   1695  fc08				   .inited
+   1696  fc08		       a5 8e		      lda	frames
+   1697  fc0a		       d0 15		      bne	.1
+   1698  fc0c		       e6 ab		      inc	rune_attract
+   1699  fc0e		       a5 a1		      lda	rune_win
+   1700  fc10		       f0 0f		      beq	.1
+   1701  fc12
+   1702  fc12		       20 4c fb 	      jsr	play	; play after some glow?
+   1703  fc15		       a9 10		      lda	#16
+   1704  fc17		       85 9a		      sta	flash	; just used here!
+   1705  fc19		       c5 96		      cmp	blocks_found
+   1706  fc1b		       d0 04		      bne	.1
+   1707  fc1d
+   1708  fc1d		       a9 c0		      lda	#STATE_RAYCAST|STATE_ATTRACT
+   1709  fc1f		       85 8c		      sta	state	; we won!
+   1710  fc21				   .1
+   1711  fc21
+   1712  fc21							;==============================================================
+   1713  fc21							; check state/timer to see if it needs to move to next state
+   1714  fc21							;
+   1715  fc21
+   1716  fc21		       24 8c		      bit	state
+   1717  fc23		       50 13		      bvc	.input	; not in attract mode
+   1718  fc25
+   1719  fc25		       a5 ab		      lda	rune_attract	;
+   1720  fc27		       c9 15		      cmp	#16+5
+   1721  fc29		       d0 0a		      bne	.word	; display "runes of moria by rossum"
+   1722  fc2b
+   1723  fc2b		       a2 c0		      ldx	#STATE_RAYCAST|STATE_ATTRACT	; enter demo attract mode
+   1724  fc2d		       86 8c		      stx	state
+   1725  fc2f		       d0 07		      bne	.input	; always
+   1726  fc31		       a9 01		      lda	#1
+   1727  fc33		       85 a9		      sta	rune_errors
+   1728  fc35
+   1729  fc35		       20 8e fd    .word      jsr	rune_word	; set the next word for title
+   1730  fc38
+   1731  fc38							;==============================================================
+   1732  fc38
+   1733  fc38							; Sprites are set, do some work
+   1734  fc38		       20 e9 fa    .input     jsr	rune_move	; get input
+   1735  fc3b		       20 46 fd 	      jsr	rune_more	; once per frame is about right ~ 10 lines
+   1736  fc3e
+   1737  fc3e		       24 8c		      bit	state
+   1738  fc40		       70 25		      bvs	.glow
+   1739  fc42
+   1740  fc42							; check to see if there is a match
+   1741  fc42		       a2 80		      ldx	#$80	; check for matches!
+   1742  fc44		       a5 a8		      lda	rune_target
+   1743  fc46		       20 8e fd 	      jsr	rune_word
+   1744  fc49		       0a		      asl
+   1745  fc4a		       85 a9		      sta	rune_errors
+   1746  fc4c		       d0 23		      bne	.0
+   1747  fc4e
+   1748  fc4e							; enter win state
+   1749  fc4e		       a5 a1		      lda	rune_win
+   1750  fc50		       d0 15		      bne	.glow
+   1751  fc52
+   1752  fc52		       e6 a1		      inc	rune_win	;
+   1753  fc54		       20 39 f9 	      jsr	block_clear
+   1754  fc57
+   1755  fc57		       a5 8e		      lda	frames
+   1756  fc59		       29 01		      and	#1	; preserve field
+   1757  fc5b		       85 8e		      sta	frames
+   1758  fc5d		       a5 8c		      lda	state
+   1759  fc5f		       09 40		      ora	#STATE_ATTRACT
+   1760  fc61		       85 8c		      sta	state	; glow and play music
+   1761  fc63		       a5 a8		      lda	rune_target
+   1762  fc65		       85 ab		      sta	rune_attract
+   1763  fc67
+   1764  fc67		       a5 a1	   .glow      lda	rune_win
+   1765  fc69		       f0 06		      beq	.0
+   1766  fc6b		       a5 8e		      lda	frames	; matchy! glow!
+   1767  fc6d		       29 0f		      and	#$0F
+   1768  fc6f		       85 aa		      sta	rune_glow
+   1769  fc71
+   1770  fc71		       ad 84 02    .0	      lda	INTIM	; wait for progress bar (lots of space here)
+   1771  fc74		       10 fb		      bpl	.0
+   1772  fc76
+   1773  fc76							;==============================================================
+   1774  fc76							; top border
+   1775  fc76
+   1776  fc76		       a9 00		      lda	#0
+   1777  fc78		       85 02		      sta	WSYNC
+   1778  fc7a		       85 01		      sta	VBLANK	; Disable VBLANK early in v=0
+   1779  fc7c		       85 0e		      sta	PF1
+   1780  fc7e
+   1781  fc7e		       a0 03		      ldy	#4-1
+   1782  fc80		       20 77 fb 	      jsr	border_bg
+   1783  fc83
+   1784  fc83		       a5 aa		      lda	rune_glow
+   1785  fc85		       85 09		      sta	COLUBK	; background color
+   1786  fc87
+   1787  fc87		       a2 05		      ldx	#TOP_BORDER
+   1788  fc89		       85 02	   .01	      sta	WSYNC
+   1789  fc8b		       ca		      dex
+   1790  fc8c		       d0 fb		      bne	.01
+   1791  fc8e
+   1792  fc8e		       b8		      clv
+   1793  fc8f		       a0 07		      ldy	#8-1	; TODO
+   1794  fc91		       20 79 fb 	      jsr	border
+   1795  fc94
+   1796  fc94							;==============================================================
+   1797  fc94							; Draw main tessellated grid
+   1798  fc94
+   1799  fc94							; 48x64
+   1800  fc94		       a9 03		      lda	#4-1
+   1801  fc96		       85 a4		      sta	rune_tmp	; draw the 48x32 tile pattern 3 times
+   1802  fc98				   .loop3
+   1803  fc98		       a2 1f		      ldx	#32-1
+   1804  fc9a		       86 a3		      stx	rune_loop
+   1805  fc9c				   .loop2
+   1806  fc9c		       a5 a2		      lda	rune_shadow
+   1807  fc9e		       45 a3		      eor	rune_loop
+   1808  fca0		       aa		      tax
+   1809  fca1		       29 01		      and	#1
+   1810  fca3		       05 a9		      ora	rune_errors
+   1811  fca5		       a8		      tay
+   1812  fca6		       85 02		      sta	WSYNC
+   1813  fca8
+   1814  fca8		       b9 69 fb 	      lda	glyph_c,y	; colors alternate every line (4 phase?)
+   1815  fcab		       85 06		      sta	COLUP0
+   1816  fcad		       85 07		      sta	COLUP1
+   1817  fcaf
+   1818  fcaf		       a5 a4		      lda	rune_tmp
+   1819  fcb1		       6a		      ror
+   1820  fcb2		       bd fa f5 	      lda	glyph+32,x
+   1821  fcb5		       bc da f5 	      ldy	glyph+0,x
+   1822  fcb8		       b0 06		      bcs	.phase
+   1823  fcba		       bd da f5 	      lda	glyph,x
+   1824  fcbd		       bc fa f5 	      ldy	glyph+32,x
+   1825  fcc0		       85 1b	   .phase     sta	GRP0
+   1826  fcc2		       84 1c		      sty	GRP1
+   1827  fcc4
+   1828  fcc4		       c6 a3	   .nxt       dec	rune_loop
+   1829  fcc6		       10 d4		      bpl	.loop2
+   1830  fcc8		       c6 a4		      dec	rune_tmp
+   1831  fcca		       10 cc		      bpl	.loop3
+   1832  fccc
+   1833  fccc							; done with main glyph, clear, turn on VDEL
+   1834  fccc		       a9 01		      lda	#1
+   1835  fcce		       20 91 fb 	      jsr	clear
+   1836  fcd1
+   1837  fcd1							;==============================================================
+   1838  fcd1							; Start drawing cartouche
+   1839  fcd1							; delay by 2 lines for a nice emboss effect
+   1840  fcd1
+   1841  fcd1		       a6 a2		      ldx	rune_shadow
+   1842  fcd3		       bd 5f fb 	      lda	rune_pal,x
+   1843  fcd6		       85 06		      sta	COLUP0
+   1844  fcd8		       85 07		      sta	COLUP1
+   1845  fcda
+   1846  fcda		       a9 2a		      lda	#(BOTTOM_LINES_RUNES*76)/64
+   1847  fcdc		       8d 96 02 	      sta	TIM64T
+   1848  fcdf
+   1849  fcdf		       a0 03		      ldy	#4-1	; TODO
+   1850  fce1		       20 79 fb 	      jsr	border
+   1851  fce4		       a9 00		      lda	#0
+   1852  fce6		       85 0f		      sta	PF2
+   1853  fce8
+   1854  fce8		       a9 03		      lda	#3
+   1855  fcea		       45 a2		      eor	rune_shadow
+   1856  fcec		       0a		      asl
+   1857  fced		       a8		      tay
+   1858  fcee		       85 02	   .g	      sta	WSYNC
+   1859  fcf0		       88		      dey
+   1860  fcf1		       10 fb		      bpl	.g
+   1861  fcf3
+   1862  fcf3							; draw the runes with 48 bit sprite
+   1863  fcf3		       a9 15		      lda	#(11*2)-1
+   1864  fcf5		       85 a3		      sta	rune_loop	; scanline counter
+   1865  fcf7				   .loop
+   1866  fcf7		       a5 a3		      lda	rune_loop	; counts backwards
+   1867  fcf9		       4a		      lsr		; 10..0
+   1868  fcfa		       a8		      tay
+   1869  fcfb		       be 1b f4 	      ldx	_six,y	; line index in rune_bits bottom to top
+   1870  fcfe		       85 02		      sta	WSYNC
+   1871  fd00		       ea		      nop
+   1872  fd01		       b5 b2		      lda	rune_bits,x
+   1873  fd03		       85 1b		      sta	GRP0
+   1874  fd05		       b5 b3		      lda	rune_bits+1,x
+   1875  fd07		       85 1c		      sta	GRP1
+   1876  fd09		       b5 b4		      lda	rune_bits+2,x
+   1877  fd0b		       85 1b		      sta	GRP0
+   1878  fd0d		       b5 b7		      lda	rune_bits+5,x
+   1879  fd0f		       85 a4		      sta	rune_tmp
+   1880  fd11		       b4 b6		      ldy	rune_bits+4,x
+   1881  fd13		       b5 b5		      lda	rune_bits+3,x
+   1882  fd15		       a6 a4		      ldx	rune_tmp
+   1883  fd17		       85 1c		      sta	GRP1
+   1884  fd19		       84 1b		      sty	GRP0
+   1885  fd1b		       86 1c		      stx	GRP1
+   1886  fd1d		       85 1b		      sta	GRP0
+   1887  fd1f		       c6 a3		      dec	rune_loop	; 2x lines
+   1888  fd21		       10 d4		      bpl	.loop	; repeat until < 0
+   1889  fd23
+   1890  fd23							; cleanup
+   1891  fd23		       a9 00		      lda	#0
+   1892  fd25		       20 91 fb 	      jsr	clear
+   1893  fd28
+   1894  fd28		       ad 84 02    .w	      lda	INTIM	; wait for progress bar (lots of space here)
+   1895  fd2b		       10 fb		      bpl	.w
+   1896  fd2d
+   1897  fd2d		       a0 07		      ldy	#8-1
+   1898  fd2f		       20 77 fb 	      jsr	border_bg
+   1899  fd32
+   1900  fd32		       85 02		      sta	WSYNC	; blank lines at bottom
+   1901  fd34		       a9 02		      lda	#2
+   1902  fd36		       85 01		      sta	VBLANK
+   1903  fd38		       a9 00		      lda	#0
+   1904  fd3a		       85 09		      sta	COLUBK
+   1905  fd3c
+   1906  fd3c		       a2 23		      ldx	#35
+   1907  fd3e		       85 02	   .02	      sta	WSYNC
+   1908  fd40		       ca		      dex
+   1909  fd41		       d0 fb		      bne	.02
+   1910  fd43		       4c 63 f6 	      jmp	vsync	; do another
+   1911  fd46
+   1912  fd46							;==============================================================
+   1913  fd46							; copies runes from rom with dissovle effect
+   1914  fd46
+   1915  fd46				   rune_more  SUBROUTINE
+   1916  fd46		       a6 a5		      ldx	rune_index
+   1917  fd48		       ca		      dex
+   1918  fd49		       10 02		      bpl	.0
+   1919  fd4b		       a2 05		      ldx	#5
+   1920  fd4d		       86 a5	   .0	      stx	rune_index	; move to the next glyph
+   1921  fd4f
+   1922  fd4f		       b5 ac		      lda	rune_chars,x	; char to draw x9
+   1923  fd51		       0a		      asl
+   1924  fd52		       0a		      asl
+   1925  fd53		       0a		      asl
+   1926  fd54		       75 ac		      adc	rune_chars,x	; carry always clear
+   1927  fd56		       a8		      tay		; index to rune in rom
+   1928  fd57
+   1929  fd57		       8a		      txa
+   1930  fd58		       69 3c		      adc	#6*(11-1)	; bottom up
+   1931  fd5a		       aa		      tax
+   1932  fd5b
+   1933  fd5b		       24 8c		      bit	state
+   1934  fd5d		       70 0a		      bvs	.loop	; in attract mode?
+   1935  fd5f
+   1936  fd5f		       a5 a6		      lda	rune_pos
+   1937  fd61		       c5 a5		      cmp	rune_index	; selection cursor
+   1938  fd63		       d0 04		      bne	.loop
+   1939  fd65		       a9 ff		      lda	#$FF
+   1940  fd67		       d0 0a		      bne	.1
+   1941  fd69
+   1942  fd69		       a9 00	   .loop      lda	#$00
+   1943  fd6b		       e0 36		      cpx	#6*9
+   1944  fd6d		       10 04		      bpl	.1
+   1945  fd6f		       b9 9f f4 	      lda	runes,y
+   1946  fd72		       c8		      iny
+   1947  fd73		       85 a4	   .1	      sta	rune_tmp
+   1948  fd75		       20 a0 fb 	      jsr	rnd0
+   1949  fd78
+   1950  fd78		       05 a4		      ora	rune_tmp	; runes are stored upside down
+   1951  fd7a		       35 b2		      and	rune_bits,x
+   1952  fd7c		       95 b2		      sta	rune_bits,x	; clear random bits not in glyph
+   1953  fd7e		       45 a0		      eor	seed_0
+   1954  fd80		       25 a4		      and	rune_tmp	; set random bits in glyph
+   1955  fd82		       15 b2		      ora	rune_bits,x
+   1956  fd84		       95 b2		      sta	rune_bits,x
+   1957  fd86
+   1958  fd86		       8a		      txa
+   1959  fd87		       38		      sec
+   1960  fd88		       e9 06		      sbc	#6
+   1961  fd8a		       aa		      tax
+   1962  fd8b		       10 dc		      bpl	.loop
+   1963  fd8d		       60		      rts
+   1964  fd8e
+   1965  fd8e							;==============================================================
+   1966  fd8e							; word index in A
+   1967  fd8e							; if X == 0x80 just test
+   1968  fd8e							; if X == 0 set current word
+   1969  fd8e							; returns mismatch count
+   1970  fd8e
+   1971  fd8e				   rune_word  SUBROUTINE
+   1972  fd8e		       0a		      asl
+   1973  fd8f		       69 02		      adc	#2
+   1974  fd91		       85 a4		      sta	rune_tmp
+   1975  fd93		       0a		      asl
+   1976  fd94		       65 a4		      adc	rune_tmp
+   1977  fd96		       86 a4		      stx	rune_tmp	; 0x80 if trying to match
+   1978  fd98		       aa		      tax
+   1979  fd99		       ca		      dex
+   1980  fd9a		       a0 05		      ldy	#5
+   1981  fd9c
+   1982  fd9c		       bd 5c f5    .0	      lda	words,x
+   1983  fd9f		       d9 ac 00 	      cmp	rune_chars,y	; match?
+   1984  fda2		       f0 07		      beq	.2
+   1985  fda4		       e6 a4		      inc	rune_tmp	; mismatches
+   1986  fda6		       30 03		      bmi	.2
+   1987  fda8		       99 ac 00 	      sta	rune_chars,y	; storing
+   1988  fdab		       ca	   .2	      dex
+   1989  fdac		       88		      dey
+   1990  fdad		       10 ed		      bpl	.0
+   1991  fdaf		       a9 7f		      lda	#$7F
+   1992  fdb1		       25 a4		      and	rune_tmp	; returns # of  mismatches
+   1993  fdb3		       60		      rts
+   1994  fdb4
+   1995  fdb4							;==============================================================
+   1996  fdb4							; debug_hex
+   1997  fdb4
+   1998  fdb4				  -	      IF	HEX
+   1999  fdb4				  -debug
+   2000  fdb4				  -	      lda	#0
+   2001  fdb4				  -	      sta	PF1
+   2002  fdb4				  -	      sta	PF2
+   2003  fdb4				  -
+   2004  fdb4				  -			; tile coords
+   2005  fdb4				  -	      lda	x_tile
+   2006  fdb4				  -	      and	#$0F
+   2007  fdb4				  -	      sta	nyb+0
+   2008  fdb4				  -
+   2009  fdb4				  -	      lda	pos_y+1
+   2010  fdb4				  -	      lsr
+   2011  fdb4				  -	      lsr
+   2012  fdb4				  -	      lsr
+   2013  fdb4				  -	      lsr
+   2014  fdb4				  -	      sta	nyb+1
+   2015  fdb4				  -
+   2016  fdb4				  -			; map coords
+   2017  fdb4				  -	      lda	pos_x+1
+   2018  fdb4				  -	      and	#$F
+   2019  fdb4				  -	      sta	nyb+2
+   2020  fdb4				  -
+   2021  fdb4				  -	      lda	pos_y+1
+   2022  fdb4				  -	      and	#$F
+   2023  fdb4				  -	      sta	nyb+3
+   2024  fdb4				  -
+   2025  fdb4				  -debug_hex
+   2026  fdb4				  -	      lda	#$0F
+   2027  fdb4				  -	      sta	COLUP0
+   2028  fdb4				  -	      sta	COLUP1
+   2029  fdb4				  -
+   2030  fdb4				  -	      lda	#0
+   2031  fdb4				  -	      sta	WSYNC
+   2032  fdb4				  -	      sta	GRP0
+   2033  fdb4				  -	      sta	GRP1
+   2034  fdb4				  -	      sta	line	; y counter
+   2035  fdb4				  -
+   2036  fdb4				  -	      ldx	#$D0	; setup 48 byte spite positions
+   2037  fdb4				  -	      stx	HMP0
+   2038  fdb4				  -	      ldx	#$C0	;
+   2039  fdb4				  -	      stx	HMP1
+   2040  fdb4				  -	      sta	RESP0	; position 1st player
+   2041  fdb4				  -	      sta	RESP1	; ...and 2nd player
+   2042  fdb4				  -
+   2043  fdb4				  -			; commit 48 bit sprite positions
+   2044  fdb4				  -	      sta	WSYNC	; start a new line
+   2045  fdb4				  -	      sta	HMOVE	; Sprites are set
+   2046  fdb4				  -	      sta	HMCLR
+   2047  fdb4				  -
+   2048  fdb4				  -	      lda	#4*8
+   2049  fdb4				  -	      sta	hy	; y counter
+   2050  fdb4				  -
+   2051  fdb4				  -.hex       lda	nyb+0
+   2052  fdb4				  -	      jsr	hexchar
+   2053  fdb4				  -	      tay
+   2054  fdb4				  -	      lda	nyb+1	; lo nybble
+   2055  fdb4				  -	      jsr	hexchar
+   2056  fdb4				  -	      ora	_sixteen,y
+   2057  fdb4				  -	      ldx	line
+   2058  fdb4				  -	      sta	char0,x
+   2059  fdb4				  -
+   2060  fdb4				  -	      lda	nyb+2
+   2061  fdb4				  -	      jsr	hexchar
+   2062  fdb4				  -	      tay
+   2063  fdb4				  -	      lda	nyb+3	; lo nybble
+   2064  fdb4				  -	      jsr	hexchar
+   2065  fdb4				  -	      ora	_sixteen,y
+   2066  fdb4				  -	      ldx	line
+   2067  fdb4				  -	      sta	char1,x
+   2068  fdb4				  -
+   2069  fdb4				  -	      inc	line
+   2070  fdb4				  -	      sec
+   2071  fdb4				  -	      lda	hy
+   2072  fdb4				  -	      sbc	#8
+   2073  fdb4				  -	      sta	hy
+   2074  fdb4				  -	      bpl	.hex
+   2075  fdb4				  -
+   2076  fdb4				  -			; ok, draw now
+   2077  fdb4				  -	      ldy	#4
+   2078  fdb4				  -.draw      sta	WSYNC
+   2079  fdb4				  -	      lda	char0,y
+   2080  fdb4				  -	      sta	GRP0
+   2081  fdb4				  -	      lda	char1,y
+   2082  fdb4				  -	      sta	GRP1
+   2083  fdb4				  -	      dey
+   2084  fdb4				  -	      bpl	.draw
+   2085  fdb4				  -
+   2086  fdb4				  -	      sta	WSYNC
+   2087  fdb4				  -	      lda	#0
+   2088  fdb4				  -	      sta	GRP0
+   2089  fdb4				  -	      sta	GRP1
+   2090  fdb4				  -	      rts
+   2091  fdb4				  -
+   2092  fdb4				  -hexchar    lsr
+   2093  fdb4				  -	      bcs	.odd
+   2094  fdb4				  -
+   2095  fdb4				  -.even      adc	hy
+   2096  fdb4				  -	      tax
+   2097  fdb4				  -	      lda	glyph,x
+   2098  fdb4				  -	      lsr
+   2099  fdb4				  -	      lsr
+   2100  fdb4				  -	      lsr
+   2101  fdb4				  -	      lsr
+   2102  fdb4				  -	      rts
+   2103  fdb4				  -
+   2104  fdb4				  -.odd       clc
+   2105  fdb4				  -	      adc	hy
+   2106  fdb4				  -	      tax
+   2107  fdb4				  -	      lda	glyph,x
+   2108  fdb4				  -	      and	#$F
+   2109  fdb4				  -.s	      rts
+   2110  fdb4					      ENDIF
+   2111  fdb4
+   2112  fdb4							;==============================================================
+   2113  fdb4							;	Raycast 3D Kernel
+   2114  fdb4							;	At the end of the code to stop it moving around
+   2115  fdb4							;	uses color masks and wall heights to draw to playfield
+   2116  fdb4							;	Alternate colors to produce BG + 3 colors
+   2117  fdb4							;	watch out for 4 cycle branches on page crossing
+   2118  fdb4							;	32h*42v pixels in 9-16 colors
+   2119  fdb4							;==============================================================
+   2120  fdb4
+   2121  fdb4							; force it here to manage page crossings
+   2122  fe2a					      org	$FE2A
+   2123  fe2a
+   2124  fe2a				   kernel     SUBROUTINE
+   2125  fe2a
+   2126  fe2a							; precompute 4th byte to make room in the beamchasing
+   2127  fe2a							; for other stuff like setting fg colors
+   2128  fe2a							; this takes 14 (!) lines.
+   2129  fe2a							; called after playfield setup at start of a line
+   2130  fe2a
+   2131  fe2a		       a2 14		      ldx	#20
+   2132  fe2c		       e4 bf	   .o	      cpx	W0+31
+   2133  fe2e		       2a		      rol
+   2134  fe2f		       e4 be		      cpx	W0+30
+   2135  fe31		       2a		      rol
+   2136  fe32		       e4 bd		      cpx	W0+29
+   2137  fe34		       2a		      rol
+   2138  fe35		       e4 bc		      cpx	W0+28
+   2139  fe37		       2a		      rol
+   2140  fe38		       e4 bb		      cpx	W0+27
+   2141  fe3a		       2a		      rol
+   2142  fe3b		       e4 ba		      cpx	W0+26
+   2143  fe3d		       2a		      rol
+   2144  fe3e		       e4 b9		      cpx	W0+25
+   2145  fe40		       2a		      rol
+   2146  fe41		       e4 b8		      cpx	W0+24
+   2147  fe43		       2a		      rol
+   2148  fe44		       95 d4		      sta	C3,x
+   2149  fe46		       ca		      dex
+   2150  fe47		       10 e3		      bpl	.o
+   2151  fe49
+   2152  fe49		       85 02		      sta	WSYNC	; end of line 20?
+   2153  fe4b		       a6 9a		      ldx	flash	; start of line 21
+   2154  fe4d		       86 09		      stx	COLUBK
+   2155  fe4f		       a0 00		      ldy	#0
+   2156  fe51		       84 0e		      sty	PF1
+   2157  fe53		       84 0f		      sty	PF2
+   2158  fe55		       a2 07		      ldx	#7
+   2159  fe57		       94 ea	   .0	      sty	p0_even,x
+   2160  fe59		       ca		      dex
+   2161  fe5a		       10 fb		      bpl	.0
+   2162  fe5c
+   2163  fe5c		       24 81		      bit	mapxh	; set overlfow flag to indicate direction
+   2164  fe5e		       85 02		      sta	WSYNC	; phase 0 - last WSYNC in kernel
+   2165  fe60				   .line_0a
+   2166  fe60		       a6 fa		      ldx	color_0
+   2167  fe62				   .line_0b
+   2168  fe62		       86 08		      stx	COLUPF
+   2169  fe64
+   2170  fe64		       a6 ea		      ldx	p0_even	; show p0
+   2171  fe66		       86 0e		      stx	PF1	; before H 0
+   2172  fe68		       a6 eb		      ldx	p1_even
+   2173  fe6a		       86 0f		      stx	PF2
+   2174  fe6c
+   2175  fe6c		       c4 a0		      cpy	W0
+   2176  fe6e		       2a		      rol
+   2177  fe6f		       c4 a1		      cpy	W0+1
+   2178  fe71		       2a		      rol
+   2179  fe72		       c4 a2		      cpy	W0+2
+   2180  fe74		       2a		      rol
+   2181  fe75		       c4 a3		      cpy	W0+3
+   2182  fe77
+   2183  fe77		       a6 ed		      ldx	p3_even
+   2184  fe79		       86 0e		      stx	PF1
+   2185  fe7b		       a6 ec		      ldx	p2_even
+   2186  fe7d		       86 0f		      stx	PF2	; ***** cycle 45, H 73
+   2187  fe7f
+   2188  fe7f		       2a		      rol
+   2189  fe80		       c4 a4		      cpy	W0+4
+   2190  fe82		       2a		      rol
+   2191  fe83		       c4 a5		      cpy	W0+5
+   2192  fe85		       2a		      rol
+   2193  fe86		       c4 a6		      cpy	W0+6
+   2194  fe88		       2a		      rol
+   2195  fe89		       c4 a7		      cpy	W0+7
+   2196  fe8b		       2a		      rol
+   2197  fe8c
+   2198  fe8c		       a6 c0		      ldx	m0_0	; generate p4
+   2199  fe8e		       87 f2		      sax	p4_even
+   2200  fe90		       a6 c4		      ldx	m0_1
+   2201  fe92		       87 f6		      sax	p4_odd
+   2202  fe94
+   2203  fe94							; line 1
+   2204  fe94		       a6 fb		      ldx	color_1
+   2205  fe96		       86 08		      stx	COLUPF
+   2206  fe98		       a6 ee		      ldx	p0_odd	; < WSYNC
+   2207  fe9a		       86 0e		      stx	PF1
+   2208  fe9c		       a6 ef		      ldx	p1_odd
+   2209  fe9e		       86 0f		      stx	PF2
+   2210  fea0
+   2211  fea0		       c4 af		      cpy	W0+15
+   2212  fea2		       2a		      rol
+   2213  fea3		       c4 ae		      cpy	W0+14
+   2214  fea5		       2a		      rol
+   2215  fea6		       c4 ad		      cpy	W0+13
+   2216  fea8		       2a		      rol
+   2217  fea9		       c4 ac		      cpy	W0+12
+   2218  feab
+   2219  feab		       a6 f0		      ldx	p2_odd
+   2220  fead		       86 0f		      stx	PF2	; ***** cycle 45, H 73
+   2221  feaf		       a6 f1		      ldx	p3_odd
+   2222  feb1		       86 0e		      stx	PF1
+   2223  feb3
+   2224  feb3		       2a		      rol
+   2225  feb4		       c4 ab		      cpy	W0+11
+   2226  feb6		       2a		      rol
+   2227  feb7		       c4 aa		      cpy	W0+10
+   2228  feb9		       2a		      rol
+   2229  feba		       c4 a9		      cpy	W0+9
+   2230  febc		       2a		      rol
+   2231  febd		       c4 a8		      cpy	W0+8
+   2232  febf		       2a		      rol
+   2233  fec0
+   2234  fec0		       a6 c1		      ldx	m1_0
+   2235  fec2		       87 f3		      sax	p5_even	; generate p5
+   2236  fec4
+   2237  fec4							; line 2
+   2238  fec4		       a6 fa		      ldx	color_2
+   2239  fec6
+   2240  fec6		       86 08		      stx	COLUPF
+   2241  fec8		       a6 ea		      ldx	p0_even
+   2242  feca		       86 0e		      stx	PF1	; H -17?
+   2243  fecc		       a6 eb		      ldx	p1_even
+   2244  fece		       86 0f		      stx	PF2
+   2245  fed0		       a6 c5		      ldx	m1_1
+   2246  fed2		       87 f7		      sax	p5_odd
+   2247  fed4
+   2248  fed4		       c4 b0		      cpy	W0+16
+   2249  fed6		       2a		      rol
+   2250  fed7
+   2251  fed7		       a6 ed		      ldx	p3_even
+   2252  fed9		       86 0e		      stx	PF1
+   2253  fedb		       ae ec 00 	      ldx.w	p2_even
+   2254  fede		       86 0f		      stx	PF2	; ***** cycle 45, H 73
+   2255  fee0
+   2256  fee0		       c4 b1		      cpy	W0+17
+   2257  fee2		       2a		      rol
+   2258  fee3		       c4 b2		      cpy	W0+18
+   2259  fee5		       2a		      rol
+   2260  fee6		       c4 b3		      cpy	W0+19
+   2261  fee8		       2a		      rol
+   2262  fee9		       c4 b4		      cpy	W0+20
+   2263  feeb		       2a		      rol
+   2264  feec		       c4 b5		      cpy	W0+21
+   2265  feee		       2a		      rol
+   2266  feef		       c4 b6		      cpy	W0+22
+   2267  fef1		       2a		      rol
+   2268  fef2		       c4 b7		      cpy	W0+23
+   2269  fef4		       2a		      rol
+   2270  fef5
+   2271  fef5							; line 3
+   2272  fef5		       a6 fb		      ldx	color_3
+   2273  fef7		       86 08		      stx	COLUPF
+   2274  fef9		       a6 ee		      ldx	p0_odd
+   2275  fefb		       86 0e		      stx	PF1
+   2276  fefd		       a6 ef		      ldx	p1_odd
+   2277  feff		       86 0f		      stx	PF2	;
+   2278  ff01
+   2279  ff01		       a6 c2		      ldx	m2_0
+   2280  ff03		       87 f4		      sax	p6_even	; generate p6
+   2281  ff05		       a6 c6		      ldx	m2_1
+   2282  ff07		       87 f8		      sax	p6_odd
+   2283  ff09
+   2284  ff09		       b9 d4 00 	      lda	C3,y	; precompute 31-28 (22 bytes)
+   2285  ff0c
+   2286  ff0c		       ae f0 00 	      ldx.w	p2_odd	; ldx p2_odd 4 cycles
+   2287  ff0f		       86 0f		      stx	PF2	; < cycle 45, H 73
+   2288  ff11		       a6 f1		      ldx	p3_odd
+   2289  ff13		       86 0e		      stx	PF1
+   2290  ff15
+   2291  ff15		       a6 c3		      ldx	m3_0	; generate P7
+   2292  ff17		       87 f5		      sax	p7_even
+   2293  ff19		       a6 c7		      ldx	m3_1
+   2294  ff1b		       87 f9		      sax	p7_odd
+   2295  ff1d
+   2296  ff1d		       70 03		      bvs	.inc
+   2297  ff1f		       88		      dey
+   2298  ff20		       d0 02		      bne	.x0
+   2299  ff22		       c8	   .inc       iny
+   2300  ff23		       ea		      nop
+   2301  ff24				   .x0
+   2302  ff24							;==============================================================
+   2303  ff24							; second set
+   2304  ff24
+   2305  ff24		       a6 fa	   .line_4    ldx	color_2
+   2306  ff26		       86 08		      stx	COLUPF
+   2307  ff28
+   2308  ff28		       a6 f2		      ldx	p4_even	; show p0
+   2309  ff2a		       86 0e		      stx	PF1	; before H 0
+   2310  ff2c		       a6 f3		      ldx	p5_even
+   2311  ff2e		       86 0f		      stx	PF2
+   2312  ff30
+   2313  ff30		       c4 a0		      cpy	W0
+   2314  ff32		       2a		      rol
+   2315  ff33		       c4 a1		      cpy	W0+1
+   2316  ff35		       2a		      rol
+   2317  ff36		       c4 a2		      cpy	W0+2
+   2318  ff38		       2a		      rol
+   2319  ff39		       c4 a3		      cpy	W0+3
+   2320  ff3b		       2a		      rol
+   2321  ff3c
+   2322  ff3c		       a6 f5		      ldx	p7_even
+   2323  ff3e		       86 0e		      stx	PF1
+   2324  ff40		       ae f4 00 	      ldx.w	p6_even
+   2325  ff43		       86 0f		      stx	PF2	;  ***** cycle 45, H 73
+   2326  ff45
+   2327  ff45		       c4 a4		      cpy	W0+4
+   2328  ff47		       2a		      rol
+   2329  ff48		       c4 a5		      cpy	W0+5
+   2330  ff4a		       2a		      rol
+   2331  ff4b		       c4 a6		      cpy	W0+6
+   2332  ff4d		       2a		      rol
+   2333  ff4e		       c4 a7		      cpy	W0+7
+   2334  ff50		       2a		      rol
+   2335  ff51
+   2336  ff51		       a6 c0		      ldx	m0_0	; generate p0
+   2337  ff53		       87 ea		      sax	p0_even
+   2338  ff55		       a6 c4		      ldx	m0_1
+   2339  ff57		       87 ee		      sax	p0_odd
+   2340  ff59
+   2341  ff59							; line 5
+   2342  ff59		       a6 fb		      ldx	color_3
+   2343  ff5b		       86 08		      stx	COLUPF
+   2344  ff5d		       a6 f6		      ldx	p4_odd	; < WSYNC
+   2345  ff5f		       86 0e		      stx	PF1
+   2346  ff61		       a6 f7		      ldx	p5_odd
+   2347  ff63		       86 0f		      stx	PF2
+   2348  ff65
+   2349  ff65		       c4 af		      cpy	W0+15
+   2350  ff67		       2a		      rol
+   2351  ff68		       c4 ae		      cpy	W0+14
+   2352  ff6a		       2a		      rol
+   2353  ff6b		       c4 ad		      cpy	W0+13
+   2354  ff6d		       2a		      rol
+   2355  ff6e		       c4 ac		      cpy	W0+12
+   2356  ff70		       2a		      rol
+   2357  ff71
+   2358  ff71		       a6 f8		      ldx	p6_odd
+   2359  ff73		       86 0f		      stx	PF2	;  ***** cycle 45, H 73
+   2360  ff75		       a6 f9		      ldx	p7_odd
+   2361  ff77		       86 0e		      stx	PF1
+   2362  ff79
+   2363  ff79		       c4 ab		      cpy	W0+11
+   2364  ff7b		       2a		      rol
+   2365  ff7c		       c4 aa		      cpy	W0+10
+   2366  ff7e		       2a		      rol
+   2367  ff7f		       c4 a9		      cpy	W0+9
+   2368  ff81		       2a		      rol
+   2369  ff82		       c4 a8		      cpy	W0+8
+   2370  ff84		       2a		      rol
+   2371  ff85
+   2372  ff85		       a6 c1		      ldx	m1_0
+   2373  ff87		       87 eb		      sax	p1_even	; generate p1
+   2374  ff89
+   2375  ff89							; line 6
+   2376  ff89		       a6 fa		      ldx	color_2
+   2377  ff8b
+   2378  ff8b		       86 08		      stx	COLUPF
+   2379  ff8d		       a6 f2		      ldx	p4_even
+   2380  ff8f		       86 0e		      stx	PF1	; H -17?
+   2381  ff91		       a6 f3		      ldx	p5_even
+   2382  ff93		       86 0f		      stx	PF2
+   2383  ff95
+   2384  ff95		       a6 c5		      ldx	m1_1
+   2385  ff97		       87 ef		      sax	p1_odd
+   2386  ff99
+   2387  ff99		       c4 b0		      cpy	W0+16
+   2388  ff9b		       2a		      rol
+   2389  ff9c		       c4 b1		      cpy	W0+17
+   2390  ff9e
+   2391  ff9e		       a6 f5		      ldx	p7_even
+   2392  ffa0		       86 0e		      stx	PF1
+   2393  ffa2		       a6 f4		      ldx	p6_even	;
+   2394  ffa4		       86 0f		      stx	PF2	;  ***** cycle 45, H 73
+   2395  ffa6
+   2396  ffa6		       2a		      rol
+   2397  ffa7		       c4 b2		      cpy	W0+18
+   2398  ffa9		       2a		      rol
+   2399  ffaa		       c4 b3		      cpy	W0+19
+   2400  ffac		       2a		      rol
+   2401  ffad		       c4 b4		      cpy	W0+20
+   2402  ffaf		       2a		      rol
+   2403  ffb0		       c4 b5		      cpy	W0+21
+   2404  ffb2		       2a		      rol
+   2405  ffb3		       c4 b6		      cpy	W0+22
+   2406  ffb5		       2a		      rol
+   2407  ffb6		       c4 b7		      cpy	W0+23
+   2408  ffb8		       2a		      rol
+   2409  ffb9
+   2410  ffb9							; line 7
+   2411  ffb9		       a6 fb		      ldx	color_3
+   2412  ffbb		       86 08		      stx	COLUPF
+   2413  ffbd		       a6 f6		      ldx	p4_odd
+   2414  ffbf		       86 0e		      stx	PF1
+   2415  ffc1		       a6 f7		      ldx	p5_odd
+   2416  ffc3		       86 0f		      stx	PF2
+   2417  ffc5
+   2418  ffc5		       a6 c2		      ldx	m2_0
+   2419  ffc7		       87 ec		      sax	p2_even	; generate p2
+   2420  ffc9		       a6 c6		      ldx	m2_1
+   2421  ffcb		       87 f0		      sax	p2_odd
+   2422  ffcd
+   2423  ffcd		       a6 f9		      ldx	p7_odd
+   2424  ffcf		       86 0e		      stx	PF1
+   2425  ffd1		       c8		      iny
+   2426  ffd2		       a6 f8		      ldx	p6_odd
+   2427  ffd4		       86 0f		      stx	PF2	; ***** cycle 45, H 73
+   2428  ffd6
+   2429  ffd6		       b9 d3 00 	      lda	C3-1,y	; precomputed 31-28 (24 bytes)
+   2430  ffd9
+   2431  ffd9		       a6 c3		      ldx	m3_0	; generate p3
+   2432  ffdb		       87 ed		      sax	p3_even
+   2433  ffdd		       a6 c7		      ldx	m3_1
+   2434  ffdf		       87 f1		      sax	p3_odd
+   2435  ffe1
+   2436  ffe1							; lots of messing with cycle times to
+   2437  ffe1							; make kernel timing work without wsync
+   2438  ffe1
+   2439  ffe1		       50 0b		      bvc	.down	; use overflow bit as up/down indicator
+   2440  ffe3		       c0 14		      cpy	#20
+   2441  ffe5		       d0 0e		      bne	.xx
+   2442  ffe7		       b8		      clv		; reversing: now going the other way
+   2443  ffe8		       ae fa 00 	      ldx.w	color_0
+   2444  ffeb		       4c 62 fe 	      jmp	.line_0b	; halfway point
+   2445  ffee		       88	   .down      dey
+   2446  ffef		       88		      dey
+   2447  fff0		       30 08		      bmi	.out
+   2448  fff2		       4c 60 fe 	      jmp	.line_0a
+   2449  fff5
+   2450  fff5		       f0 03	   .xx	      beq	.out
+   2451  fff7		       4c 60 fe 	      jmp	.line_0a
+   2452  fffa		       60	   .out       rts		; early 191
+   2453  fffb
+   2454  fffc					      org	$fffc
+   2455  fffc		       40 f6		      .word.w	Start
+   2456  fffe		       40 f6		      .word.w	Start

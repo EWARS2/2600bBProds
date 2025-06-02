@@ -1,0 +1,2456 @@
+
+	processor 6502
+	include "vcs.h"
+	include "macro.h"
+	include "xmacro.h"
+
+PAL	EQU 0
+DEBUG	EQU 0
+HEX	EQU 0 
+
+;==============================================================
+
+	seg.u Variables
+        
+        ; 32 bytes persistent game state
+        
+	org $80
+mapx		byte	; pointer to map lo (always 0)
+mapxh		byte	; pointer to map hi
+pos_x		word	; player position x
+
+pos_y		word	; player position y
+angle		byte	; player angle
+x_tile		byte	; maps are tiled on a 4x4 grid
+
+col		byte	; screen col of current ray (0->31)
+velocity	byte	; signed
+keys		byte	; used by attract mode
+block_index 	byte	; within 4x4 - 0..15
+
+state		byte	; game state
+seed_1		byte	; game random state seed
+frames		word	; number of frames counted
+
+fx		byte	; fx to make
+fxtimer		byte	; countdown timer for effect
+music		byte	;
+mtimer		byte
+
+attract		byte	; only used in attract mode
+atimer  	byte
+blocks_found 	byte
+block_visible 	byte
+
+blocks0		byte	; 
+blocks1		byte	;
+flash		byte	;
+triggers	byte	; 
+
+rays		word	; (DEBUG) number of rays cast / 32
+bonked		byte
+
+;==============================================================
+;	Raycast frame buffer
+
+	org $A0
+
+;	52 bytes of 'frame buffer'
+
+; 	32 wall heights
+W0	.ds 32
+
+;	color masks for display
+;	these are reversed every frame to blend colors
+m0_0	byte	; phase 0
+m1_0	byte
+m2_0	byte
+m3_0	byte
+
+m0_1	byte
+m1_1	byte
+m2_1	byte
+m3_1	byte
+
+m0	byte	; byte buffers to make insertions faster/simpler
+m1	byte
+
+m0_2	byte	; phase 1
+m1_2	byte
+m2_2	byte
+m3_2	byte
+
+m0_3	byte
+m1_3	byte
+m2_3	byte
+m3_3	byte
+
+m2	byte
+m3	byte
+
+	org $D4
+;	40 bytes of Raycast Display Kernel Temporaries
+;	C3 stores prefligted last col
+;	extends to 0xFC - room for a teeny little stack...
+
+C3	.ds 22	; fourth column of raster pix (display is 32*42)
+
+;	16 bytes of line temps, used to draw to screen
+;	Each 4 lines we generate 8 bytes
+        
+p0_even	byte
+p1_even	byte
+p2_even	byte
+p3_even	byte
+
+p0_odd	byte
+p1_odd	byte
+p2_odd	byte
+p3_odd	byte
+
+p4_even	byte
+p5_even	byte
+p6_even	byte
+p7_even	byte
+
+p4_odd	byte
+p5_odd	byte
+p6_odd	byte
+p7_odd	byte
+
+; fg colors
+color_0	byte
+color_1	byte
+;color_2	byte
+;color_3	byte
+
+;==============================================================
+;	raycast temps, used to draw to ray to 'frame buffer'
+;	move temps, used to do player movement
+;	extends to 0xFA - room for a little stack...
+;	42 bytes
+	
+	org $D4
+step		word	; major step ,minor is always 0x100
+major		word	; major ddr sum
+
+reor		byte	; mask for converting angle to step index
+rmap		byte	; offset into map data
+dist		byte	; measured distance
+wall		byte	; wall
+
+minor_l		byte	; lo byte of minor ddr sum
+sx		byte
+sy		byte
+rpix		byte	; 
+
+rangle		byte	; angle of current ray
+rside 		byte	; xmajor side flag
+rscale		byte	; log of ray scale factor
+rpos_major	byte	; player pos based on angle quadrant
+
+;==============================================================
+;	move temps
+
+px		word
+py		word
+abs_velocity	byte
+wall_hit	byte
+
+;==============================================================
+;	Rune frame buffer & state
+;	this region accomodates 6*9 bytes required for
+;	rendering runes, plus rune specific state
+;	extends to 0xFA - room for a little stack...
+;	90 bytes
+
+	org $A0
+;	        
+seed_0		byte
+rune_win	byte
+rune_shadow	byte ; rune anti-alias / shadow phase
+rune_loop	byte
+
+rune_tmp	byte
+rune_index	byte ; current 'more' index
+rune_pos	byte ; current selected letter
+rune_keys	byte ; debounce
+
+rune_target	byte ; target word we are looking for
+rune_errors	byte ; number of incorrect letters
+rune_glow	byte
+rune_attract	byte
+
+rune_chars	.ds 6	; 60 bytes for rune state/bitmaps
+rune_bits	.ds 6*11
+
+;==============================================================
+; debug_hex
+	
+	org $D4
+nyb	.ds 4
+line	byte
+hy	byte
+char0	.ds 5
+char1	.ds 5
+
+
+;==============================================================
+
+STATE_RAYCAST	EQU	$80	; use raycast mode
+STATE_ATTRACT	EQU	$40	; in attract mode
+STATE_PHASE	EQU	$01	; instead of frames?
+
+;==============================================================
+
+MAXV	EQU 32
+
+	IF PAL
+TOP_LINES 		EQU (37+25)
+BOTTOM_LINES		EQU (38+25)
+TOP_BORDER		EQU 12
+BOTTOM_LINES_RUNES	EQU (31+25)
+        ELSE
+TOP_LINES 		EQU 38
+BOTTOM_LINES 		EQU 37
+TOP_BORDER 		EQU 5
+BOTTOM_LINES_RUNES	EQU 36
+        ENDIF
+        
+color_2	EQU color_0
+color_3	EQU color_1
+        
+;==============================================================
+
+	seg Code
+        org $f000
+        
+;==============================================================
+;	tables
+;==============================================================
+;       basic rendering code is about .75k
+;	Kernel is ~.5k
+;	Log Tables are 640 bytes
+;	1k for maps?
+
+
+        ALIGN 256
+        	; nice little map of our world
+                ; 81 red
+                ; 82 green
+                ; 83 yellow
+map
+		hex 8383838383839000908F908F908F908F
+	hex 8502C00285608F000000000000000000
+	hex 840285028440408F908F838700878300
+	hex 85028402854088000000870000008700
+	hex 8401850184000000000000008C000000
+	hex 85018401018482820000870000008700
+	hex 84010185010000000000838700879291
+	hex 92820100840082820000820000920000
+	hex 00008200810081000083000000910091
+	hex 92008200900090008200008400840000
+	hex 85000000814081008300898584858900
+	hex 868F9081404090408300000085000000
+	hex 81404040408140408385840084008485
+	hex 85408140814040908F00000085000000
+	hex 81606088404090000000898584858900
+	hex 85816040408F8F008F00000000000000
+
+
+	hex 81818F908F9090009091929192919291
+	hex 818C0000000090000000000000000000
+	hex 92000087870000908F91920000890000
+	hex 91008760408C00000000009289009100
+	hex 9200878C400000860086000000009200
+	hex 91000087000087018601868600000000
+	hex 92000000000181020202010186009291
+	hex 91820000890102870287820100920000
+	hex 0000820089010202C002028200910082
+	hex 910082008901898702870281008A0000
+	hex 83008200814001020281018100008A00
+	hex 85000088404088810101000088008200
+	hex 89008160608100000081008100008200
+	hex 88000081880000908F00008800008A00
+	hex 830000000000900000008800008A0000
+	hex 838B008C008B8F008F88820000000000
+        
+	; log2*32 128
+_log2
+	hex 00002032404A525960656A6E7276797D
+	hex 808285878A8C8E9092949698999B9D9E
+	hex A0A1A2A4A5A6A7A9AAABACADAEAFB0B1
+	hex B2B3B4B5B6B7B8B9B9BABBBCBDBDBEBF
+	hex C0C0C1C2C2C3C4C4C5C6C6C7C7C8C9C9
+	hex CACACBCCCCCDCDCECECFCFD0D0D1D1D2
+	hex D2D3D3D4D4D5D5D5D6D6D7D7D8D8D9D9
+	hex D9DADADBDBDBDCDCDDDDDDDEDEDEDFDF
+        
+	; pow(2,i/16) single byte 128
+_exp16
+	hex 01010101010101010101010101010101
+	hex 02020202020202020203030303030303
+	hex 04040404040505050506060606070707
+	hex 08080809090A0A0B0B0C0C0D0D0E0E0F
+	hex 10111112131415161718191A1B1C1D1F
+	hex 2022232526282A2C2E30323436393B3E
+	hex 4144474A4D5154585C6064696D72777D
+	hex 82888E949BA2A9B1B8C1C9D2DBE5EFFA
+        
+	; 128..255, low byte 128 but full range not used
+_exp16l
+	hex 05111D2937445362718293A5B7CBDFF5
+	hex 0B223A536E89A6C4E304264A6F96BFEA
+	hex 164475A7DC134D89C7094D95DF2D7FD4
+	hex 2C89EA4FB8279A128F129B2ABF5BFEA8
+	hex 5913D49E714E34241F253755;7FB7FC50
+	;hex B326A93DE39C68483E4B6EAAFE6EF9A0
+	;hex 664C527AC638D0917D96DC54FDDCF241
+	;hex CD98A4F48D70A123FB2CB9A8FBB9E483
+        
+	; log of step for stepping & multipling with player pos (101..0)
+_ray_step_log2
+	hex 654C4038322E2A2623211E1C1A181615
+	hex 1312100F0D0C0B090807060503020100
+
+	; log of distance scale factor (0..15)
+_ray_scale_log
+	hex 00000000000000000101010102020203
+	hex 030404050606070808090A0B0C0D0E0F
+        
+	; log of fisheye adjustment to distance (32)
+_ray_fisheye
+	hex 03020202010101010000000000000000
+	hex 00000000000000000101010102020203
+       
+	; cos (64) (could be log2 cos)
+_cos	hex 403F3F3F3F3F3F3F3E3E3E3D3D3C3C3B
+	hex 3B3A3939383736363534333231302F2E
+	hex 2D2C2A29282726242322201F1E1C1B19
+	hex 1817151412110F0E0C0A090706040301
+
+	; a table or two
+_sx_ym	byte 1,-1,-1,1
+_sy_ym	byte 15,15,-17,-17	; not 16, eliminates clc in ray loop
+_sx_xm	byte 16,16,-16,-16	; xmajor, eliminates clc in ray loop
+_sy_xm	byte 0,-2,-2,0
+_rphase	hex FFFF0000FFFF
+_rquad	hex 00FF00FF
+
+	; base height - walls are 0..22
+_base	
+	byte 160-10,128-10,96-10,64-10,32-10
+        
+_sixteen
+      	hex 00102030405060708090A0B0C0D0E0F0
+        
+_six	byte 60,54,48,42,36,30,24,18,12,6,0
+        
+_mask	hex 8040201008040201	; bit index to mask
+	
+_bar	hex 0080C0E0F0F8FCFE	; todo
+	hex 000103070F1F3F7F
+        
+_bar_c	IF PAL
+	byte $62,$44,$24,$34; progress bar color
+        ELSE
+        byte $44,$26,$16,$D4
+        ENDIF
+        
+	;	---------------	
+	;	|   |G  |   |G  | 0123
+	;	|   |   |R  |R  |
+	;	 ---------------
+	;	|  R|G R|  R|G R| 4567
+	;	|   |   |R  |R  |
+	;	 ---------------
+	;	|   |G  |   |G  | 89AB
+	;	|  G|  G|R G|R G|
+	;	 ---------------
+	;	|  R|G R|  R|G R| CDEF
+	;	|  G|  G|R G|R G|
+	;	 ---------------
+
+	;	0 0 -Black
+	;	1 4 -DGreen
+	;	2 8 -DRed
+	;	3 C -DYellow
+	;	4 1 -DRed
+	;	5 5 -HYellow
+	;	6 9 -Red
+	;	7 D -YRed
+	;	8 2 -DGreen
+	;	9 6 -Green
+	;	A A -LYellow
+	;	B E -YGreen
+	;	C 3 -DYellow
+	;	D 7 -YGreen
+	;	E B -YRed
+	;	F F -Yellow
+
+	; two phases of color index to bitmap
+        ; [c2][c1][c0][side][field] lookup
+                
+_pal	; lighter/darker
+	;hex 00000000	; black - not used
+	hex 06090401	; 81 red
+	hex 09060104	; 82 green
+	hex 0F0F0505	; 83 yellow
+	hex 0D07070D	; 84 yellow red - no shade
+	hex 070D0D07	; 85 yellow green - no shade
+	hex 030C0C03	; 86 darker yellow
+
+	; corners
+	hex 06090104	; 87 red/dk green
+	hex 06090505	; 88 red/dk yellow
+	hex 09060401	; 89 green/dk red
+	hex 09060505	; 8A green/dk yellow
+	hex 0F0F0104	; 8B yellow/dk green
+	hex 0F0F0401	; 8C yellow/dk red
+
+	; special
+	hex 030C0C03	; 8D yellow special 1 - weirdly colored door blocks
+	hex 0C03030C	; 8E yellow special 2
+        
+        ; wireframe - 16 bytes.
+        hex 02080401	; 8f wireframe red
+	hex 04010208	; 90 wireframe red
+        hex 08020104	; 91 wireframe green
+	hex 01040802	; 92 wireframe green
+
+        ; palette
+        ; 000000,ff0000,00ff00,ffff00,a1e000,e0a100,808000
+        ; 804000,c04000,408000,40c000,80c000,c08000
+        ; a0a082,818081,0000c0,0000e0,00007f
+
+	IF PAL
+_red	byte $66,$A6,$96,$E6,$04,$62
+_green	byte $52,$34,$44,$D4,$02,$60 
+	ELSE
+_red	byte $36,$66,$A6,$E6,$04,$32
+_green	byte $C4,$14,$44,$84,$02,$30
+        ENDIF
+
+	; key inputs for attract mode
+        ; uses 0 at start of runes as terminator
+	; right 0111 7
+        ; left  1011 B
+        ; fwd   1110 E
+        ; rwd   1101 D
+_demo
+	byte $72,$E2,$74,$E6,$72,$EC,$71,$F4,$E9
+
+	IF HEX
+runes
+words
+glyph
+        .byte %11100100,%11101110,%10101110,%11101110,%11101110,%11101110,%11101100,%11101110
+        .byte %10101100,%00100010,%10101000,%10000010,%10101010,%10101010,%10001010,%10001000
+        .byte %10100100,%11101110,%11101110,%11100100,%11101110,%11101100,%10001010,%11001100
+        .byte %10100100,%10000010,%00100010,%10100100,%10100010,%10101010,%10001010,%10001000
+        .byte %11101110,%11101110,%00101110,%11100100,%11101110,%10101110,%11101100,%11101000
+	ELSE
+        
+runes	; 21x9 19 bytes
+	hex 000000103810000000
+	hex E0988698E0988698E0
+	hex 828282444428281010
+	hex 081010101092543810
+	hex 081010101010101020
+	hex 42848484848488B0C0
+	hex 8080808698E08698E0
+	hex 44AA10284482442810
+	hex 101010103854549292
+	hex 848A90A0E0988698E0
+	hex 081010503814101020
+	hex 8282828E92E2828282
+	hex 609008040204089060
+	hex 408080C0A090C8A494
+	hex AAAAAA545454282828
+	hex 081010284482442810
+	hex 020202020E32C2320E
+	hex 020202020202C2320E	; only used for thorin
+        hex 384482828282828282 	; U -18
+	hex 0C122040FC4020120C 	; E -19
+	hex 30480402FE80402418 	; S -20
+
+	; https://www.tecendil.com/?q=balrog&mode=erebor
+
+words	byte  1, 2, 3, 4, 5, 0	; moria
+	byte  1, 4, 8,11,12, 0	; mines
+	byte  6, 7, 3, 4, 8, 0	; durin
+	byte  9, 5,10, 4, 8, 0	; balin
+        
+	byte 13, 4, 1,10, 4, 0	; gimli
+	byte 17, 2, 3, 4, 8, 0	; thorin
+	byte 16, 3, 2, 6, 2, 0	; frodo
+	byte  9, 4,10, 9, 2, 0	; bilbo
+        
+	byte  3, 7, 8,11,12, 0	; runes
+	byte 12, 1, 5, 7,13, 0	; smaug
+	byte 12, 5, 7, 3, 2, 8	; sauron
+	byte 13, 2,10,10, 7, 1	; gollum
+        
+	byte  9, 5,10, 3, 2,13	; balrog
+	byte  1, 2, 3, 6, 2, 3	; mordor
+	byte 11, 3,11, 9, 2, 3	; erebor
+	byte  1, 4,17, 3, 4,10	; mithril
+
+	; english
+	byte  9,18, 5,19,20, 0	; runes
+	byte  0, 0,15, 6 ,0, 0	; of
+	byte 14,15, 9, 4, 2, 0	; Moria
+        byte  0, 0, 1, 8, 0, 0	; by
+        byte  9,15,20,20,18,14	; rossum
+        
+	; nice dwarf tesselation
+glyph
+	hex FF5400FE01FC01F8
+	hex 05F006E09BC02C80
+	hex 70013C011C4D3C61
+	hex 30612061007F6A00
+	hex 7F15803F481F440F
+	hex 530731036C011A00
+	hex 07C01E409CD99CC3
+	hex 84C380C300FFAB00
+        ENDIF
+        
+_map_pos
+	byte >map,$80,9,$80,6,$92
+
+	; lotr theme
+        
+MS	equ 8
+M1	equ 0*32
+M4	equ 1*32
+M6	equ 2*32
+M8	equ 3*32
+M16	equ 4*32
+MAXVOL	equ 15
+
+_lotr
+       	byte 23+M8
+       	byte 26+M6
+       	byte 26+M1
+       	byte 26+M1
+       	byte 23+M16
+        
+       	byte 17+M1
+       	byte 15+M1
+       	byte 14+M6
+        byte 15+M1
+        byte 17+M1
+        byte 19+M6
+        byte 17+M1
+        byte 15+M1
+        
+        byte 17+M8
+        byte 19+M4
+        byte 20+M4
+ 	byte 0
+
+	IF PAL
+_durs	byte 1*6,4*6,6*6,8*6,16*6
+	ELSE
+_durs	byte 1*8,4*8,6*8,8*8,16*8
+	ENDIF
+
+_ctrl	byte  8 ,8,12,12, 3
+_freq	byte 12,14,31,24,15
+
+;==============================================================
+;	Moria
+;==============================================================
+
+Start	CLEAN_START
+	lda #$31
+        sta CTRLPF
+        
+	ldx #5
+.0	lda _map_pos,x
+	sta mapxh,x
+        dex
+        bpl .0
+
+        dec blocks0	; set to $FF
+        dec blocks1	; set to $FF
+        inc seed_1	; game seed set on first button
+        
+        lda #STATE_ATTRACT
+        IF DEBUG
+        lda #STATE_RAYCAST
+        ENDIF
+        sta state	; enter vsync
+        
+;==============================================================
+;	handle vsync, audio
+
+vsync	SUBROUTINE
+ 	lda #2
+	sta WSYNC	;
+        sta VSYNC
+        lda #(2*76)/64
+        sta TIM64T  	; to sync at end of VSYNC
+        
+        ; a little win flash
+        
+        ldx flash
+        beq .0
+        dec flash
+.0
+	;==============================================================
+        ; lotr music player 46 + 17 bytes
+        ; https://alienbill.com/2600/atari-sound-forger/
+        ; is super handy
+        
+       	bit state	; play music in attract mode?
+        bvc .fx
+        
+        ldx mtimer
+        beq .e
+       	dex
+        stx mtimer
+        
+        cpx #MAXVOL
+        bcs .fx
+        stx AUDV0
+        bcc .fx
+        
+.e      ldx music	; get the next note
+	lda _lotr,x
+        bne .f
+        tax
+        lda _lotr	; loop
+.f	inx
+        stx music
+        
+        ldy #12		; maybe play 6 at endgame?
+        sty AUDC0	; 3 is flangy and cool, 6 is dark, 12 is pure
+        sta AUDF0	; play it
+	rol
+        rol
+        rol
+        rol
+        and #7
+        tax
+        lda _durs,x
+        sta mtimer
+        lda #MAXVOL
+        sta AUDV0
+
+        ;==============================================================
+        ; sound fx
+        
+.fx     lax fxtimer
+        beq .snd
+        dex
+        stx fxtimer
+        
+        cmp #5
+        bpl .drone
+        stx AUDV1
+        bcc .drone	; always
+
+.snd	lda fx
+	bne .play
+        
+.feet	lda velocity	; footsteps
+	beq .drone	; dont start another
+        lda #1
+        and frames
+        
+.play   tax		; index of effect to play
+	lda _ctrl,x
+        sta AUDC1
+	lda _freq,x
+        sta AUDF1
+	lda #16
+        sta fxtimer	; zero vol to start
+        lda #0
+        sta fx
+        
+        ; make a droning sound near doors
+.drone	lda block_visible	; only if door is visible
+        beq .quiet
+        bit state
+        bpl .quiet		; and in raycast
+        lda #7			; droning volume
+        and triggers
+        beq .quiet
+        
+.v2    	lsr
+	sta AUDV0	; play a droning sound near doors
+        lda #15
+        sta AUDC0
+        asl
+        sta AUDF0	; droning sound
+        bne .finish
+
+.quiet	bit state
+	bvs .finish	; don't silence music
+	lda #0
+	sta AUDV0
+        
+.finish	ldx INTIM  	; wait until ready
+        bpl .finish
+        
+       	ldx #0
+       	stx WSYNC
+        stx VSYNC        
+        ldx flash
+        stx COLUPF	;
+        
+        bit state
+        bmi raycaster
+        jmp rune_kernel
+        
+;==============================================================
+;	Raycaster
+;==============================================================
+
+raycaster	SUBROUTINE
+        lda #(TOP_LINES*76)/64 ; lines of VBLANK
+        sta TIM64T  	; time we can run for
+        
+        ; force colors in scary parts
+      	bit triggers
+        bpl .2
+        ldx #4	; darken
+        ldy #4
+        bvc .c
+        inx	; balrog
+        iny
+        bvs .c
+
+	; setup colors for this frame (switch every frame)
+        ; colors change when moving maps
+.2      lax block_index
+        lsr
+        lsr
+        tay	; y tile indexes 'green'
+        txa
+        and #$3
+        tax	; x tile indexes 'red'
+        
+.c      lda frames
+        ror
+        bcc .1
+        
+        lda _red,x
+        ldx _green,y
+        bne .colors
+        
+.1     	lda _red,x
+	tax
+        lda _green,y
+        
+.colors
+	sta color_0
+        stx color_1
+	;sta color_2	; feature not used
+        ;stx color_3
+        
+       	jsr ray		; draw some rays TODO after colors
+
+.done2	lda INTIM  	; wait until ready
+        bpl .done2
+        
+        ; draw the progress bar
+       	lda blocks_found
+        and #15
+        tax
+        ldy _bar,x
+        cpx #8
+        bpl .big
+        lda #0
+        beq .ok
+.big	tya
+	ldy #$FF
+        
+.ok     sty PF2
+        sta PF1
+        
+	lda #0
+        sta WSYNC
+        sta VBLANK	; Disable VBLANK early in v=0
+	ldy #2
+        sty COLUBK	; grey progress bar
+        lda blocks_found
+        lsr
+        lsr
+        tax
+        ldy _bar_c,x
+        sty COLUPF	; progress bar indicator
+        
+       	jsr kernel	; gets here start of V=1
+
+        ; new frame starts at the bottom of the screen
+        ; as we enter VBLANK
+
+        inc frames
+        IF DEBUG
+        bne .f
+        inc frames+1
+.f      
+	ENDIF
+
+	; do a little hex debug
+	IF HEX
+        jsr debug
+        lda #((BOTTOM_LINES-21)*76)/64 ; lines of VBLANK at bottom
+        ELSE
+        lda #(BOTTOM_LINES*76)/64 ; lines of VBLANK at bottom
+        ENDIF
+        ldx #2
+        sta VBLANK
+        sta TIM64T  	; time we can run for
+        
+        ; reverse masks
+        ldx #10-1
+.rev    lda m0_0,x
+        ldy m0_0+10,x
+        sta m0_0+10,x
+        sty m0_0,x
+        dex
+        bpl .rev
+        
+        jsr move	; takes n 5 lines
+	jsr ray		; actually do some drawing
+
+.done3	lda INTIM  	; wait until ready
+        bpl .done3
+	
+        
+; 	All done. Time for next frame
+	jmp vsync	; start of 221
+      
+;==============================================================
+
+get_map	SUBROUTINE; carry clear if you can go there
+        and #$0F		; y
+        tay
+        txa
+        clc
+        adc _sixteen,y
+        tay
+        lda (mapx),y
+        bpl .trigger	; top bit clear
+        
+        rol        
+        bpl .bonk	; normal colored block
+        
+      	ldx block_visible	; C0 block
+        bne .rune		; disabled
+        clc			; block is clear
+        rts
+.rune   
+	ldx #0		; enter rune stage
+        stx state
+.bonk                
+       	ldx #0		; bonked
+	stx velocity
+        ldx #2
+        stx fx
+	rts
+.trigger
+	rol		; shift for bit access
+	sta triggers	; 7 bits of state at each block
+        and #$40
+        bne .1		; balrog bits
+.0      rts
+        
+.1	lda block_visible
+        bne .0
+        sta fxtimer	; force fx
+        lda #6		; balrog steal noise
+        sta fx
+        sta flash
+	jmp block_set	; balrog just reset a door
+	
+;==============================================================
+;	move - check joysticks
+;==============================================================
+
+        
+move	SUBROUTINE
+	;bit INPT4
+        
+        ; handle attract mode demo playback
+        
+        bit state		; STATE_ATTRACT?
+        bvc .live
+        
+        dec atimer		; timer still running?
+        bpl .keys		; keep going
+        
+        ldx attract        
+        lda _demo,x
+        beq .done		; finished with demo 
+        
+	sta keys		; get a new sample
+        inx
+	stx attract		; update player
+        and #$F
+        tax
+        lda _sixteen,x
+        sta atimer		; play another sample
+        bne .keys		; always
+
+.done	sta atimer
+        sta attract
+        lda #STATE_ATTRACT	; back to runes
+        sta state		;
+        
+	; joystick input
+        
+.live	lda SWCHA
+        sta keys
+        
+        ; interpret keys
+.keys
+	ldx #0
+	bit keys
+        bvs .2		; 01000000
+        dec angle	; Left rotate
+        
+        bit keys
+.2      bmi .3		; 10000000
+        inc angle	; Right rotate
+        
+.3      lda #%00010000  ; Up
+        bit keys 
+        bne .4
+        ldx #1
+        
+.4	lda #%00100000  ; Down
+        bit keys
+        bne .5
+        ldx #-1
+        
+        ; lots of faffing to make velocity feel smooth
+.5	txa
+	bne .6
+        
+        lda velocity	; not moving
+        beq .9
+        bpl .p
+        inx
+        inx
+.p	dex		; round towards zero
+        bne .pin	;
+
+.6	eor velocity	; zero velocity when changing directions
+	bpl .pin	;
+       	lda #0
+       	sta velocity
+        
+.pin	txa
+	clc
+	adc velocity
+        bpl .8
+        
+        cmp #256-MAXV
+        bcs .7
+        lda #256-MAXV
+        bne .7
+.8      cmp #MAXV
+	bcc .7
+	lda #MAXV-1
+
+.7	sta velocity	; pinned to +-31
+        bne motion
+.9	jmp reset	; check reset switch
+
+;==============================================================
+;	move forward and backward
+;==============================================================
+
+	; multiply velocity by cosines in x,y
+        ; add to current player point
+       
+delta	SUBROUTINE
+	sty wall_hit	; tmp
+        
+	ldy _cos,x
+        beq .z
+        
+       	ldx abs_velocity	; up to 31
+        clc
+        lda _log2,y
+        adc _log2,x
+        ror
+        lsr
+        cmp #40	; speed divider
+        bcc .z
+        tax
+        lda _exp16-40,x ; speed divider
+        bcs .nz
+        
+.z     	lda #0
+.nz     ldx wall_hit
+	clc
+        eor px+1,x
+        adc pos_x,x
+        sta px,x
+        lda px+1,x
+        adc pos_x+1,x
+        sta px+1,x
+        rts
+        
+        ; returns x cos index in X, y sin index in rangle
+
+motion	SUBROUTINE
+	ldx #0
+        stx wall_hit
+        lda velocity
+        bpl .p
+        ldx #$80
+        eor #$FF
+        sec
+        adc #0	; abs(velocity) - going in reverse?
+.p      sta abs_velocity
+	txa
+        eor angle
+	sta rangle
+        
+	rol
+        rol
+        rol
+        clc
+        and #$3		; invert if backwards TODO
+        tay		; y is quadrant index
+        
+        lda _rphase+3,y	; 
+        sta px+1	;
+        lda _rphase+2,y	; 
+        sta py+1	; 0x00 or 0xFF based on quadant
+        
+        lda rangle
+        eor _rquad,y
+        and #$3F
+	tax		; x index to cos
+        eor #$3F
+        sta rangle	; sin
+        
+        ; x cos index in X, y sin index in rangle
+        
+        ; px = pos_x + dx
+        ldy #0
+        jsr delta
+        
+        ; py = pos_y + dy
+        ldy #2
+        ldx rangle
+        jsr delta
+        
+	; check for collision with walls
+        ; x_tile,y_tile positions are maintained separately
+
+.check_y
+        ldx pos_x+1
+        lda py+1
+        jsr get_map
+        bcc .y_ok
+        bcs .check_x
+        
+        ; no intersection, y step is good
+.y_ok	lda py
+        sta pos_y
+        ldx py+1
+        stx pos_y+1
+        
+.check_x        
+        ldx px+1
+        lda pos_y+1
+       	jsr get_map
+        bcc .x_ok
+        bcs .tile
+        
+.x_ok	; no intersection, x step is good
+	lda px
+        sta pos_x
+        lax px+1
+        and #$0F
+        sta pos_x+1
+        
+        ; x wrapping needs y updates
+        txa
+        and #$F0
+        beq .tile
+        bpl .pl
+        dec x_tile	; new tile h
+        dec pos_y+1
+        jmp .tile
+.pl	inc x_tile	; new tile
+        inc pos_y+1
+        
+        ; update x_tile,y_tile,map
+        ; map is x^y
+        
+.tile   lda pos_y+1
+	lsr
+        lsr
+        tax
+        lsr
+        lsr
+     	eor x_tile
+        and #1
+        ora #>map
+        sta mapxh	; map is x_tile^y_tile
+        
+        ; finally make the block index
+        
+        txa
+        and #$0C
+        sta block_index
+        lda x_tile
+        and #$03
+        ora block_index
+        sta block_index
+        
+        ; get the block bit
+
+        jsr bit_init
+        and blocks0,x
+	sta block_visible
+	rts
+        
+bit_init SUBROUTINE	; 16 bit indexed bitmap
+	lda block_index
+	lsr
+        tay
+        ldx #0
+        bcs .cs
+        inx
+.cs     lda _mask,y
+	rts
+
+	; turn the block back on
+block_set SUBROUTINE
+        jsr bit_init
+        sta block_visible
+	dec blocks_found
+        ora blocks0,x
+        sta blocks0,x
+	rts
+        
+        ; clear the block after decoding rune
+block_clear SUBROUTINE
+        lda #0
+	sta block_visible
+        inc blocks_found
+        jsr bit_init
+        eor #$FF
+        and blocks0,x
+        sta blocks0,x
+	rts
+        
+;==============================================================
+;	ray
+;	render one or more rays
+;	col 	screen col (0->31)
+;	setup ~2 line
+;	each step takes roughly 1/2 a scanline at minimum
+;	writeback ~2 lines
+;==============================================================
+
+ray	SUBROUTINE
+	lda pos_y+1	; this probably will get done in move TODO
+        and #$0F
+        tay
+        lda pos_x+1
+        ora _sixteen,y
+        sta rmap	; establish our map pos
+
+        lda col
+        and #$1F
+        jmp .new_col	; re-entering
+        
+ray_loop
+	; get map step directions from angle
+        ; a has current angle to draw
+        lda col		;
+        and #$1F
+        bne .col_ready	; col_ready
+        
+.new_col
+	sta col		; at col that needs an angle update
+        
+	clc
+	adc angle
+	sec
+        sbc #16		; angle of ray TODO
+        sta rangle	; every 32
+        jmp .new_octant	; 
+        
+.col_ready
+	lax rangle
+	and #$1F
+        bne .octant_ready	; 
+       
+       	; recalc after entering a new octant
+        ; happens less often
+.new_octant
+	clc
+	lda rangle
+        and #$E0
+        rol
+        rol
+        rol
+        tax		; quadrant index
+        
+        ldy #$3F	; setup angle index mask
+    	bcs .p
+        ldy #0
+.p      sty reor
+	rol
+        tay		; octant index
+        lda _mask,y
+        and #$66	; bitmap of xmajors
+        bne .xmm
+        
+.ymm	
+	sta rside	; flag xmajor or ymajor for side
+
+        lda _sx_ym,x	; y major octant - TODO MERGE?
+	sta sx
+        lda _sy_ym,x
+        sta sy
+
+       	lda _rphase,x	; player positon as starting point for ray
+        eor pos_y
+        lsr		
+        tay
+        
+	lda _rphase+1,x
+        eor pos_x
+        ldx #0
+        beq .or		; always
+        
+.xmm
+	ldy #1        	; side flag     
+        sty rside	; flag xmajor or ymajor for side
+        
+	lda _sx_xm,x	; x major octant
+	sta sx
+        lda _sy_xm,x
+        sta sy
+        
+	lda _rphase+1,x	; player positon as starting point for ray
+        eor pos_x
+        lsr		
+       	tay
+        
+        lda _rphase,x
+        eor pos_y
+        
+.or	sta minor_l	; player pos * minor step (i.e. 0x100)
+        lda _log2,y	; _log2[p>>1]
+        lsr			
+        adc #16
+        sta rpos_major	; to be multiplied
+
+.octant_ready
+	lda rangle
+	eor reor	; angle->index
+	and #$1F 	; index of slope to draw
+	tax
+        
+       	; get step sizes for the ray
+        
+        ldy _ray_step_log2,x	;
+        lda _exp16l,y
+        sta step
+        lda _exp16,y
+        sta step+1
+	lda _ray_scale_log,x	; scaled to normalize minor step to 0x100
+        sta rscale		; fisheye - scale
+        
+        ; multiply px or py by _ray_step_log2
+        
+        clc
+        lda rpos_major		; positon of player to be multiplied			
+	adc _ray_step_log2,x	; scaled major step size (always > 0x100)
+        bmi .large
+        
+        tax
+        lda #0
+        ldy _exp16,x	; return _exp16[i];
+        jmp .ok
+.large
+	and #$7F
+        tax
+        lda _exp16,x	; TODO. we can eliminate these probably
+        ldy _exp16l,x	; return _exp16l[i] + (_exp16h[i]<<8);
+.ok
+        sta major+1	; major step size * player pos
+        sty major
+        
+        ; raycast loop - this needs to be snappy
+        
+        ldy rmap	; pointer on our map
+        ldx #0		; minor_h
+	cpx major+1
+        bcc .step_minor
+        bne .step_major
+        
+.xx     lda minor_l
+	cmp major 	; compare low bytes
+	bcs .step_major
+        
+.step_minor  
+        tya
+        adc sx
+        tay
+        lda (mapx),y
+        bmi .done_minor	; hit a wall in y
+
+        ; 16 bit add in minor axis (always adding 0x100)
+.mi_vis inx
+
+        cpx major+1	; compare high bytes
+        bcc .step_minor	; dxh < dyh
+        beq .xx		; rarely get here but branch always taken
+        
+.step_major
+        tya		; Step x direction
+        adc sy
+        tay
+        lda (mapx),y
+        bmi .done_major	; hit a wall in major axis
+
+        ; 16 bit add dx, put dxh in x
+.mj_vis lda major	; major += step
+        adc step
+        sta major
+        lda major+1
+        adc step+1
+        sta major+1
+        
+        cpx major+1	; compare high bytes
+        bcc .step_minor	; dxh < dyh
+        bne .step_major	; dyh > dxh
+        beq .xx		; rarely get here but branch always taken
+        
+.done_major
+	asl
+        bpl .v0
+       
+       	jsr special
+        beq .mj_vis
+
+.v0	ldy major
+        ldx major+1
+        ora #1		; wall bit #0 is hit major side
+        bne distance	; always
+        
+.done_minor
+	asl
+        bpl .v1
+        
+        jsr special
+        beq .mi_vis      
+.v1	
+	;ldx minor_h	; already in x
+        ldy minor_l
+
+;==============================================================
+;	this alone takes about 3 lines to calculate
+
+distance	SUBROUTINE
+	eor rside	; translate to side flag
+      	sta wall	; block we hit
+        
+        txa		; dist high in A
+        beq .draw 	; if we are closer than a certain distance wall is full height
+
+	; range distance to < 128
+        
+	sty dist	; distance low
+        ldy #1
+        bne .7		; while (dist & 0xFF) {dist >>= 8; i++};
+        
+.6      iny
+        ror dist
+.7      lsr
+        bne .6
+        
+.4	ror dist	; range dist into 0..255
+        bpl .5		; cuts log2 table in half
+        iny
+        lsr dist	; 0..127
+.5
+        ; calculate wall height from distance
+        
+.project
+	ldx dist	
+        lda _base,y	; i += [160,128,96,64,32,0][y]
+	sbc _log2,x	; i -= _log2[dist] // divide
+        
+        ldy col		; y is now col index
+        adc _ray_fisheye,y	; i += _ray_fisheye[col]
+        ;sec		; always clear, is ok
+        sbc rscale	; divide by dist ray_scale
+        lsr
+        tax		; log of height
+        sec        
+        lda #20		; max height is 20
+        sbc _exp16,x	; wall height value for renderer
+        bpl .draw
+        lda #0		; wall is full height
+        
+       	; RAY IS CAST!
+        ; draw wall color into mask buffer at this col
+        
+.draw	ldx col		; x is now col index
+	sta W0,x	; save height
+        
+        lda frames	; field index
+        ror
+        lda wall
+        rol		; [color][side][field]
+	tay		; palette index in y
+        
+        lda #8
+        sbx #8		; bit 3 of col -> carry
+	lda _pal-4,y	; bit pattern of color
+        bcc .rol
+
+	ror
+.ror    ror m0
+        ror
+        ror m1
+        ror
+        ror m2
+        ror
+        ror m3
+        jmp .flush
+        
+.rol    ror
+        rol m0
+        ror
+        rol m1
+        ror
+        rol m2
+        ror
+        rol m3
+        
+.flush  inc col
+        lax col
+        and #$7
+        bne .next
+        
+        txa		; flush to mask every 8 cols
+        lsr
+        lsr
+        lsr
+        tax
+        lda m0		; copy to main color masks every 8 bits
+        sta m0_0-1,x
+        lda m1
+        sta m0_1-1,x
+        lda m2
+        sta m0_2-1,x
+        lda m3
+        sta m0_3-1,x
+        
+;	ready for more
+.next	inc rangle
+	
+        IF DEBUG	; count full frames
+        lda col
+        cmp #32
+        bne .r
+        inc rays
+        bne .r
+        inc rays+1
+.r
+	ENDIF
+        
+	ldx INTIM	; render until we run out of time
+	cpx #10		; need this long worst case
+        bmi .exit
+        jmp ray_loop	; still time for more
+.exit	rts        
+
+;==============================================================
+;==============================================================
+;	Rune selection
+
+rune_move SUBROUTINE
+	bit INPT4
+        bmi .0
+
+       	ldx seed_1	; establish seed on first button push
+        dex
+        bne play	; already initalized
+       
+        lda frames	; use first trigger as seed
+        ora #1
+	sta seed_1	; must be non-zero
+        bne play	; 
+
+.0	lda SWCHA
+        eor #$FF	; 1 = on ffs
+        tax
+        eor rune_keys
+        stx rune_keys
+        and rune_keys	; down events
+        sta rune_tmp
+        
+        and #$F0
+        beq .mv
+        lda #3
+        sta fx		; key sound
+        
+.mv     ldx rune_pos
+
+.1      bit rune_tmp
+     	bpl .2      ; 10000000 right
+        cpx #5
+        beq .2
+        inx
+        
+.2      bit rune_tmp
+        bvc .3      ; 01000000 left
+        cpx #0
+        beq .3
+        dex
+ 
+.3	ldy rune_chars,x
+	lda #%00100000  ; Down
+        bit rune_tmp
+        beq .4
+        dey
+        bpl .4
+        ldy #17
+        
+.4      lda #%00010000  ; Up
+        bit rune_tmp 
+        beq .5
+        iny
+	cpy #18
+	bne .5
+        ldy #0
+        
+.5    	stx rune_pos
+	sty rune_chars,x
+        
+reset	lda SWCHB	; check select and reset
+        lsr		; reset in carry
+        bcs .6
+        jmp Start	; reset
+.6      rts
+        
+play    lda #STATE_RAYCAST	; go play
+        sta AUDV0
+        sta state
+        rts
+
+	; special block color
+special	SUBROUTINE
+	lda block_visible	; is the special block visible
+        beq .0
+        lda #1
+        and col
+        asl
+        adc  #26
+.0      rts
+        
+;==============================================================
+;	Rune Kernel
+;==============================================================
+
+rune_pal
+	byte $0E,$00
+cartouche
+	byte $06,$0E,$08,$08
+	byte $00,$02,$04,$06
+        
+	; colors improve with more correct letters
+glyph_c
+        IF PAL
+        byte $68,$BA	; beard,helm
+        byte $68,$BA
+        byte $68,$0A
+        byte $08,$0A
+        byte $06,$08
+        byte $04,$06
+        byte $02,$04
+        ELSE
+        byte $38,$9C
+        byte $38,$9C
+        byte $38,$0C
+        byte $08,$0C
+        byte $06,$0A
+        byte $04,$08
+        byte $02,$06
+        ENDIF
+
+border_bg SUBROUTINE
+	bit mapxh	; F8
+border	ldx #4-1	; draw top of cartouche
+.0      sta WSYNC
+	lda cartouche,y
+        dey
+        bvs .1
+        sta COLUPF
+        lda #$FC	; Tight playfield around glyph
+        sta PF2
+        bvc .2
+.1      sta COLUBK
+.2      dex
+        bpl .0
+        rts
+        
+clear	SUBROUTINE
+        sta WSYNC
+        sta VDELP0	; we need the VDEL registers
+        sta VDELP1	; so we can do our 4-store trick
+        lda #0
+        sta GRP0
+        sta GRP1
+        sta GRP0
+        rts
+        
+rnd0	SUBROUTINE
+.rnd	lda seed_0	; get a rand
+	asl
+        bcc .eor
+        eor #$CF
+.eor	sta seed_0
+	rts
+
+rune_kernel	SUBROUTINE
+.ws     sta WSYNC
+        lda #(TOP_LINES*76)/64
+        sta TIM64T  	; at line -37
+        
+        inc frames
+        lda frames	; extra clock for positioning
+        and #1
+        sta rune_shadow
+        
+        lda #%011	; 3 copies of sprites for glyph and runes
+        sta NUSIZ0
+        sta NUSIZ1
+        
+        ldx #$10	; setup 48 byte spite positions
+        stx HMP0
+        ldx #$20
+        stx HMP1
+        sta RESP0	; position 1st player
+        sta RESP1	; ...and 2nd player        
+
+	; commit 48 bit sprite positions
+        sta WSYNC	; start a new line
+	sta HMOVE	; Sprites are set
+
+        ;==============================================================
+        ; update timers and state
+        
+        lda #1		; or zero?
+        bit state
+	bne .inited
+        
+        ; init state if required
+
+        inc state
+        sta frames
+        lsr
+        sta mtimer
+        sta rune_win
+        sta rune_errors
+        
+        lda #6
+        sta rune_glow
+
+        lda #16
+        sta music
+        sta rune_attract ; "runes of moria by rossum"
+        
+        lda seed_1		; 
+        eor block_index
+        ora #1			; non-zero force
+	sta seed_0
+        and #$F
+        sta rune_target
+        
+        ; randomize rune letters
+        ldy #5
+.rnd	jsr rnd0
+        eor rune_chars,y
+	and #$F
+        beq .rnd		; don't use 0
+        sta rune_chars,y
+        dey
+        bpl .rnd
+        
+        IF DEBUG
+        ldx #0
+        lda rune_target
+        jsr rune_word
+        ENDIF
+        
+.inited
+        lda frames
+        bne .1
+        inc rune_attract
+        lda rune_win
+        beq .1
+                
+        jsr play		; play after some glow?
+        lda #16
+        sta flash		; just used here!
+        cmp blocks_found
+        bne .1
+        
+        lda #STATE_RAYCAST|STATE_ATTRACT
+        sta state		; we won!
+.1
+        
+        ;==============================================================
+	; check state/timer to see if it needs to move to next state
+        ;
+        
+        bit state
+        bvc .input		; not in attract mode
+        
+        lda rune_attract	; 
+        cmp #16+5
+        bne .word		; display "runes of moria by rossum"
+        
+        ldx #STATE_RAYCAST|STATE_ATTRACT ; enter demo attract mode
+        stx state
+        bne .input		; always
+        lda #1
+        sta rune_errors
+        
+.word	jsr rune_word		; set the next word for title
+        
+        ;==============================================================
+
+        ; Sprites are set, do some work
+.input  jsr rune_move	; get input
+	jsr rune_more	; once per frame is about right ~ 10 lines
+        
+        bit state
+        bvs .glow
+        
+        ; check to see if there is a match
+        ldx #$80	; check for matches!
+        lda rune_target
+        jsr rune_word
+        asl
+        sta rune_errors
+        bne .0
+        
+	; enter win state
+        lda rune_win
+        bne .glow
+        
+	inc rune_win	;
+        jsr block_clear
+        
+        lda frames
+        and #1		; preserve field
+        sta frames
+        lda state
+        ora #STATE_ATTRACT
+        sta state	; glow and play music
+        lda rune_target
+        sta rune_attract
+        
+.glow   lda rune_win
+	beq .0
+	lda frames	; matchy! glow!
+        and #$0F
+        sta rune_glow
+
+.0	lda INTIM	; wait for progress bar (lots of space here)
+        bpl .0
+        
+        ;==============================================================
+        ; top border
+        
+        lda #0
+        sta WSYNC	
+        sta VBLANK	; Disable VBLANK early in v=0
+        sta PF1
+        
+        ldy #4-1
+        jsr border_bg
+        
+        lda rune_glow
+        sta COLUBK	; background color
+        
+        ldx #TOP_BORDER
+.01     sta WSYNC
+        dex
+        bne .01
+        
+        clv
+	ldy #8-1	; TODO
+        jsr border
+
+        ;==============================================================
+        ; Draw main tessellated grid
+       
+	; 48x64
+	lda #4-1
+        sta rune_tmp	; draw the 48x32 tile pattern 3 times
+.loop3
+        ldx #32-1
+        stx rune_loop
+.loop2
+	lda rune_shadow
+       	eor rune_loop
+        tax
+        and #1
+        ora rune_errors
+        tay
+        sta WSYNC
+	
+        lda glyph_c,y	; colors alternate every line (4 phase?)
+	sta COLUP0
+        sta COLUP1
+
+	lda rune_tmp
+        ror
+      	lda glyph+32,x
+        ldy glyph+0,x
+        bcs .phase        
+       	lda glyph,x
+        ldy glyph+32,x
+.phase	sta GRP0
+        sty GRP1
+        
+.nxt	dec rune_loop
+	bpl .loop2     
+        dec rune_tmp
+        bpl .loop3
+        
+        ; done with main glyph, clear, turn on VDEL
+        lda #1
+        jsr clear
+        
+        ;==============================================================
+	; Start drawing cartouche
+        ; delay by 2 lines for a nice emboss effect
+
+	ldx rune_shadow
+        lda rune_pal,x
+        sta COLUP0
+        sta COLUP1
+        
+        lda #(BOTTOM_LINES_RUNES*76)/64
+        sta TIM64T
+        
+        ldy #4-1	; TODO
+        jsr border
+        lda #0
+       	sta PF2
+        
+        lda #3
+        eor rune_shadow
+        asl
+	tay
+.g	sta WSYNC
+	dey
+        bpl .g
+	        
+	; draw the runes with 48 bit sprite
+        lda #(11*2)-1
+        sta rune_loop	; scanline counter
+.loop
+        lda rune_loop	; counts backwards
+        lsr		; 10..0
+        tay
+        ldx _six,y	; line index in rune_bits bottom to top
+	sta WSYNC
+        nop
+        lda rune_bits,x
+        sta GRP0
+        lda rune_bits+1,x
+        sta GRP1
+        lda rune_bits+2,x
+        sta GRP0
+        lda rune_bits+5,x
+        sta rune_tmp
+        ldy rune_bits+4,x
+        lda rune_bits+3,x
+        ldx rune_tmp
+        sta GRP1
+        sty GRP0
+        stx GRP1
+        sta GRP0
+	dec rune_loop	; 2x lines
+	bpl .loop	; repeat until < 0
+        
+        ; cleanup
+        lda #0
+        jsr clear
+
+.w	lda INTIM	; wait for progress bar (lots of space here)
+        bpl .w        
+
+        ldy #8-1
+        jsr border_bg
+        
+        sta WSYNC	; blank lines at bottom
+       	lda #2
+        sta VBLANK
+        lda #0
+        sta COLUBK
+        
+        ldx #35
+.02     sta WSYNC
+        dex
+        bne .02
+        jmp vsync	; do another
+
+        ;==============================================================
+        ; copies runes from rom with dissovle effect
+        
+rune_more	SUBROUTINE
+	ldx rune_index
+        dex
+        bpl .0
+        ldx #5
+.0      stx rune_index		; move to the next glyph
+
+	lda rune_chars,x	; char to draw x9
+        asl
+        asl
+        asl
+        adc rune_chars,x	; carry always clear
+        tay			; index to rune in rom
+        
+        txa
+        adc #6*(11-1)		; bottom up
+        tax
+        
+        bit state
+        bvs .loop		; in attract mode?
+        
+        lda rune_pos
+        cmp rune_index		; selection cursor
+        bne .loop
+        lda #$FF
+        bne .1
+        
+.loop	lda #$00
+        cpx #6*9
+        bpl .1
+        lda runes,y
+        iny  
+.1      sta rune_tmp
+	jsr rnd0
+
+	ora rune_tmp	; runes are stored upside down
+	and rune_bits,x
+	sta rune_bits,x	; clear random bits not in glyph
+        eor seed_0
+        and rune_tmp	; set random bits in glyph 
+       	ora rune_bits,x
+        sta rune_bits,x
+        
+      	txa
+        sec
+        sbc #6
+        tax
+        bpl .loop
+        rts
+        
+        ;==============================================================
+        ; word index in A
+        ; if X == 0x80 just test
+        ; if X == 0 set current word
+        ; returns mismatch count
+
+rune_word	SUBROUTINE
+        asl
+        adc #2
+        sta rune_tmp
+        asl
+        adc rune_tmp
+       	stx rune_tmp	; 0x80 if trying to match
+	tax
+        dex
+	ldy #5
+        
+.0      lda words,x
+      	cmp rune_chars,y	; match?
+	beq .2
+        inc rune_tmp		; mismatches
+        bmi .2
+       	sta rune_chars,y	; storing
+.2      dex
+        dey
+        bpl .0
+        lda #$7F
+        and rune_tmp		; returns # of  mismatches
+        rts
+
+	;==============================================================
+	; debug_hex
+	
+    	IF HEX
+debug
+	lda #0
+        sta PF1
+        sta PF2
+        
+        ; tile coords
+        lda x_tile
+        and #$0F
+        sta nyb+0
+
+        lda pos_y+1
+        lsr
+        lsr
+        lsr
+        lsr
+        sta nyb+1
+
+	; map coords
+        lda pos_x+1
+        and #$F
+        sta nyb+2
+        
+        lda pos_y+1
+        and #$F
+        sta nyb+3
+        
+debug_hex
+        lda #$0F
+        sta COLUP0
+        sta COLUP1
+        
+        lda #0
+        sta WSYNC
+        sta GRP0
+        sta GRP1
+        sta line    	; y counter 
+
+        ldx #$D0	; setup 48 byte spite positions
+        stx HMP0
+        ldx #$C0	;
+        stx HMP1
+        sta RESP0	; position 1st player
+        sta RESP1	; ...and 2nd player        
+
+	; commit 48 bit sprite positions
+        sta WSYNC	; start a new line
+	sta HMOVE	; Sprites are set
+	sta HMCLR
+        
+	lda #4*8
+        sta hy    	; y counter 
+        
+.hex    lda nyb+0
+        jsr hexchar
+        tay
+        lda nyb+1     	; lo nybble
+        jsr hexchar
+        ora _sixteen,y
+        ldx line
+        sta char0,x
+        
+	lda nyb+2
+        jsr hexchar
+        tay
+        lda nyb+3     	; lo nybble
+        jsr hexchar
+        ora _sixteen,y
+        ldx line
+        sta char1,x
+        
+        inc line
+        sec
+        lda hy
+        sbc #8
+        sta hy
+        bpl .hex
+        
+        ; ok, draw now
+        ldy #4
+.draw   sta WSYNC
+	lda char0,y
+        sta GRP0
+	lda char1,y
+        sta GRP1
+        dey
+        bpl .draw
+        
+        sta WSYNC
+        lda #0
+        sta GRP0
+        sta GRP1
+        rts
+        
+hexchar lsr 
+        bcs .odd
+        
+.even   adc hy
+        tax
+        lda glyph,x
+        lsr
+        lsr
+        lsr
+        lsr
+        rts
+        
+.odd    clc
+        adc hy
+        tax
+        lda glyph,x
+        and #$F
+.s      rts
+        ENDIF
+
+;==============================================================
+;	Raycast 3D Kernel
+;	At the end of the code to stop it moving around
+;	uses color masks and wall heights to draw to playfield
+; 	Alternate colors to produce BG + 3 colors
+;	watch out for 4 cycle branches on page crossing
+;	32h*42v pixels in 9-16 colors
+;==============================================================
+
+	; force it here to manage page crossings
+	org $FE2A
+        
+kernel	SUBROUTINE
+
+	; precompute 4th byte to make room in the beamchasing
+        ; for other stuff like setting fg colors
+        ; this takes 14 (!) lines.
+        ; called after playfield setup at start of a line
+                
+	ldx #20
+.o      cpx W0+31
+        rol
+        cpx W0+30
+        rol
+       	cpx W0+29
+       	rol
+      	cpx W0+28
+      	rol
+        cpx W0+27
+      	rol
+        cpx W0+26
+      	rol
+        cpx W0+25
+      	rol
+        cpx W0+24
+      	rol
+        sta C3,x
+        dex
+        bpl .o
+
+	sta WSYNC	; end of line 20?
+       	ldx flash	; start of line 21
+       	stx COLUBK
+        ldy #0
+        sty PF1
+        sty PF2
+        ldx #7
+.0      sty p0_even,x
+        dex
+        bpl .0
+
+       	bit mapxh	; set overlfow flag to indicate direction
+	sta WSYNC	; phase 0 - last WSYNC in kernel
+.line_0a
+	ldx color_0
+.line_0b 
+ 	stx COLUPF
+        
+	ldx p0_even	; show p0
+        stx PF1		; before H 0
+       	ldx p1_even
+        stx PF2
+
+        cpy W0
+        rol
+        cpy W0+1
+        rol
+        cpy W0+2
+        rol
+        cpy W0+3
+        
+        ldx p3_even
+        stx PF1
+       	ldx p2_even
+        stx PF2		; ***** cycle 45, H 73
+
+	rol
+        cpy W0+4
+        rol
+        cpy W0+5
+        rol
+        cpy W0+6
+        rol
+        cpy W0+7
+        rol
+        
+        ldx m0_0	; generate p4
+        sax p4_even
+        ldx m0_1
+        sax p4_odd
+        
+	; line 1
+        ldx color_1
+        stx COLUPF
+        ldx p0_odd	; < WSYNC
+        stx PF1
+       	ldx p1_odd
+        stx PF2
+        
+        cpy W0+15
+        rol
+        cpy W0+14
+        rol        
+        cpy W0+13
+        rol
+        cpy W0+12
+        
+       	ldx p2_odd
+        stx PF2		; ***** cycle 45, H 73
+        ldx p3_odd
+        stx PF1    
+        
+        rol
+        cpy W0+11
+        rol
+        cpy W0+10
+        rol
+        cpy W0+9
+        rol
+        cpy W0+8
+        rol
+        
+        ldx m1_0
+        sax p5_even	; generate p5
+
+	; line 2
+       	ldx color_2
+
+        stx COLUPF
+       	ldx p0_even
+        stx PF1		; H -17?
+       	ldx p1_even
+        stx PF2
+        ldx m1_1
+        sax p5_odd
+        
+        cpy W0+16
+        rol
+
+        ldx p3_even
+        stx PF1
+       	ldx.w p2_even
+        stx PF2		; ***** cycle 45, H 73
+
+        cpy W0+17
+        rol
+        cpy W0+18
+        rol
+        cpy W0+19
+        rol
+        cpy W0+20
+        rol
+        cpy W0+21
+       	rol
+        cpy W0+22
+        rol
+        cpy W0+23
+        rol
+        
+	; line 3
+        ldx color_3
+        stx COLUPF
+        ldx p0_odd
+        stx PF1
+        ldx p1_odd
+        stx PF2		; 
+        
+       	ldx m2_0
+        sax p6_even	; generate p6
+        ldx m2_1
+        sax p6_odd  
+        
+        lda C3,y	; precompute 31-28 (22 bytes)
+
+        ldx.w p2_odd	; ldx p2_odd 4 cycles
+        stx PF2		; < cycle 45, H 73
+        ldx p3_odd
+        stx PF1
+        
+      	ldx m3_0	; generate P7
+        sax p7_even
+        ldx m3_1
+        sax p7_odd
+        
+        bvs .inc
+        dey
+        bne .x0
+.inc    iny
+	nop
+.x0	
+        ;==============================================================
+	; second set
+        
+.line_4 ldx color_2
+        stx COLUPF
+        
+	ldx p4_even	; show p0
+        stx PF1		; before H 0
+       	ldx p5_even
+        stx PF2
+
+        cpy W0
+        rol
+        cpy W0+1
+        rol
+        cpy W0+2
+        rol
+        cpy W0+3
+       	rol
+
+       	ldx p7_even
+        stx PF1
+        ldx.w p6_even
+        stx PF2		;  ***** cycle 45, H 73
+
+        cpy W0+4
+        rol
+        cpy W0+5
+        rol
+        cpy W0+6
+        rol
+        cpy W0+7
+        rol
+        
+        ldx m0_0	; generate p0
+        sax p0_even
+        ldx m0_1
+        sax p0_odd
+        
+	; line 5
+        ldx color_3
+        stx COLUPF
+        ldx p4_odd	; < WSYNC
+        stx PF1
+       	ldx p5_odd
+        stx PF2
+        
+        cpy W0+15
+        rol
+        cpy W0+14
+        rol        
+        cpy W0+13
+        rol
+ 	cpy W0+12
+        rol
+        
+       	ldx p6_odd
+        stx PF2		;  ***** cycle 45, H 73
+        ldx p7_odd
+        stx PF1
+        
+        cpy W0+11
+        rol
+        cpy W0+10
+        rol
+        cpy W0+9
+        rol
+        cpy W0+8
+        rol
+        
+        ldx m1_0
+        sax p1_even	; generate p1
+
+	; line 6
+       	ldx color_2
+
+        stx COLUPF
+       	ldx p4_even
+        stx PF1		; H -17?
+       	ldx p5_even
+        stx PF2
+
+        ldx m1_1
+        sax p1_odd
+        
+        cpy W0+16
+        rol
+        cpy W0+17
+        
+        ldx p7_even
+        stx PF1
+       	ldx p6_even	;
+        stx PF2		;  ***** cycle 45, H 73
+
+	rol
+        cpy W0+18
+        rol
+        cpy W0+19
+        rol
+        cpy W0+20
+        rol
+        cpy W0+21
+       	rol
+        cpy W0+22
+        rol
+        cpy W0+23
+        rol
+        
+	; line 7
+        ldx color_3
+        stx COLUPF
+        ldx p4_odd
+        stx PF1
+        ldx p5_odd
+        stx PF2
+        
+       	ldx m2_0
+        sax p2_even	; generate p2
+        ldx m2_1
+        sax p2_odd  
+        
+        ldx p7_odd
+        stx PF1
+        iny
+      	ldx p6_odd
+        stx PF2		; ***** cycle 45, H 73
+
+        lda C3-1,y	; precomputed 31-28 (24 bytes)
+
+      	ldx m3_0	; generate p3
+        sax p3_even
+        ldx m3_1
+        sax p3_odd
+        
+        ; lots of messing with cycle times to
+        ; make kernel timing work without wsync
+        
+       	bvc .down	; use overflow bit as up/down indicator
+        cpy #20
+        bne .xx
+        clv		; reversing: now going the other way
+        ldx.w color_0
+        jmp .line_0b	; halfway point
+.down   dey
+	dey
+        bmi .out
+        jmp .line_0a
+
+.xx	beq .out
+        jmp .line_0a
+.out	rts		; early 191
+
+	org $fffc
+	.word Start
+	.word Start

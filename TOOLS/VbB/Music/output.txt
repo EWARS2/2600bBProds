@@ -1,0 +1,5 @@
+segment:  ff9c                    vs current org: 10509
+      -1389 bytes of ROM space left
+
+C:\Users\jefma\Desktop\VbB\Music\music_test_044b0d32-e38e-4a1c-b8ac-1c5fb0bbbf7b.bas.asm (6218): error: Origin Reverse-indexed.
+
